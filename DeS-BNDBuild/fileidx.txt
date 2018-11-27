@@ -53,6 +53,7 @@
 /chr/c1201.chrbnd.dcx
 /chr/c1202.anibnd.dcx
 /chr/c1202.chrbnd.dcx
+/chr/c1202.chrtpfbdt
 /chr/c1203.anibnd.dcx
 /chr/c1203.chrbnd.dcx
 /chr/c2060.anibnd.dcx
@@ -63,11 +64,13 @@
 /chr/c2220.chrbnd.dcx
 /chr/c2230.anibnd.dcx
 /chr/c2230.chrbnd.dcx
+/chr/c2230.chrtpfbdt
 /chr/c2231.anibnd.dcx
 /chr/c2231.chrbnd.dcx
 /chr/c2231.chrtpfbdt
 /chr/c2232.anibnd.dcx
 /chr/c2232.chrbnd.dcx
+/chr/c2232.chrtpfbdt
 /chr/c2239.chrbnd.dcx
 /chr/c2239.chrtpfbdt
 /chr/c2240.anibnd.dcx
@@ -96,10 +99,12 @@
 /chr/c2360.chrbnd.dcx
 /chr/c2370.anibnd.dcx
 /chr/c2370.chrbnd.dcx
+/chr/c2370.chrtpfbdt
 /chr/c2380.anibnd.dcx
 /chr/c2380.chrbnd.dcx
 /chr/c2390.anibnd.dcx
 /chr/c2390.chrbnd.dcx
+/chr/c2390.chrtpfbdt
 /chr/c2400.anibnd.dcx
 /chr/c2400.chrbnd.dcx
 /chr/c2410.anibnd.dcx
@@ -125,6 +130,7 @@
 /chr/c2560.chrbnd.dcx
 /chr/c2570.anibnd.dcx
 /chr/c2570.chrbnd.dcx
+/chr/c2570.chrtpfbdt
 /chr/c2580.chrbnd.dcx
 /chr/c2580.chrtpfbdt
 /chr/c2590.anibnd.dcx
@@ -151,11 +157,13 @@
 /chr/c2710.chrbnd.dcx
 /chr/c2711.anibnd.dcx
 /chr/c2711.chrbnd.dcx
+/chr/c2711.chrtpfbdt
 /chr/c2730.anibnd.dcx
 /chr/c2730.chrbnd.dcx
 /chr/c2730.chrtpfbdt
 /chr/c2731.anibnd.dcx
 /chr/c2731.chrbnd.dcx
+/chr/c2731.chrtpfbdt
 /chr/c2750.anibnd.dcx
 /chr/c2750.chrbnd.dcx
 /chr/c2780.anibnd.dcx
@@ -173,6 +181,7 @@
 /chr/c2795.anibnd.dcx
 /chr/c2795.chrbnd.dcx
 /chr/c2799.chrbnd.dcx
+/chr/c2799.chrtpfbdt
 /chr/c2800.anibnd.dcx
 /chr/c2800.chrbnd.dcx
 /chr/c2810.anibnd.dcx
@@ -188,10 +197,13 @@
 /chr/c2840.chrbnd.dcx
 /chr/c2860.anibnd.dcx
 /chr/c2860.chrbnd.dcx
+/chr/c2860.chrtpfbdt
 /chr/c2861.chrbnd.dcx
+/chr/c2861.chrtpfbdt
 /chr/c2869.chrbnd.dcx
 /chr/c2870.anibnd.dcx
 /chr/c2870.chrbnd.dcx
+/chr/c2870.chrtpfbdt
 /chr/c2900.anibnd.dcx
 /chr/c2900.chrbnd.dcx
 /chr/c2909.chrbnd.dcx
@@ -229,6 +241,7 @@
 /chr/c3270.chrbnd.dcx
 /chr/c3290.anibnd.dcx
 /chr/c3290.chrbnd.dcx
+/chr/c3290.chrtpfbdt
 /chr/c3300.anibnd.dcx
 /chr/c3300.chrbnd.dcx
 /chr/c3320.anibnd.dcx
@@ -272,6 +285,7 @@
 /chr/c3450.chrtpfbdt
 /chr/c3451.anibnd.dcx
 /chr/c3451.chrbnd.dcx
+/chr/c3451.chrtpfbdt
 /chr/c3460.anibnd.dcx
 /chr/c3460.chrbnd.dcx
 /chr/c3461.anibnd.dcx
@@ -302,12 +316,14 @@
 /chr/c3511.chrbnd.dcx
 /chr/c3520.anibnd.dcx
 /chr/c3520.chrbnd.dcx
+/chr/c3520.chrtpfbdt
 /chr/c3530.anibnd.dcx
 /chr/c3530.chrbnd.dcx
 /chr/c3530.chrtpfbdt
 /chr/c3530_c3530.anibnd.dcx
 /chr/c3531.anibnd.dcx
 /chr/c3531.chrbnd.dcx
+/chr/c3531.chrtpfbdt
 /chr/c4090.anibnd.dcx
 /chr/c4090.chrbnd.dcx
 /chr/c4091.anibnd.dcx
@@ -364,8 +380,10 @@
 /chr/c5200.chrtpfbdt
 /chr/c5201.anibnd.dcx
 /chr/c5201.chrbnd.dcx
+/chr/c5201.chrtpfbdt
 /chr/c5202.anibnd.dcx
 /chr/c5202.chrbnd.dcx
+/chr/c5202.chrtpfbdt
 /chr/c5210.anibnd.dcx
 /chr/c5210.chrbnd.dcx
 /chr/c5210.chrtpfbdt
@@ -392,6 +410,7 @@
 /chr/c5261.chrbnd.dcx
 /chr/c5270.anibnd.dcx
 /chr/c5270.chrbnd.dcx
+/chr/c5270.chrtpfbdt
 /chr/c5271.anibnd.dcx
 /chr/c5271.chrbnd.dcx
 /chr/c5271.chrtpfbdt
@@ -421,6 +440,7 @@
 /chr/c5350.chrtpfbdt
 /chr/c5351.anibnd.dcx
 /chr/c5351.chrbnd.dcx
+/chr/c5351.chrtpfbdt
 /chr/c5352.anibnd.dcx
 /chr/c5352.chrbnd.dcx
 /chr/c5353.anibnd.dcx
@@ -2992,6 +3012,7 @@
 /menu/common.menuesdbnd.dcx
 /menu/common.menuesdbnd.dcx.sdat
 /menu/ENGLISH/menu_local.tpf.dcx
+/menu/bk.drb.dcx
 /menu/fade.drb
 /menu/fade.drb.dcx
 /menu/fade.tpf.dcx
@@ -3805,6 +3826,7 @@
 /obj/o9998.objbnd.dcx
 /obj/o9999.objbnd.dcx
 /other/default.rumblebnd
+/other/ds_ranking.properties
 /other/envlight.tpf
 /other/ICON01.PNG
 /other/ICON02.PNG
