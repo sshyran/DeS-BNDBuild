@@ -29,6 +29,7 @@ Partial Class Des_BNDBuild
         Me.btnExtract = New System.Windows.Forms.Button()
         Me.txtInfo = New System.Windows.Forms.TextBox()
         Me.lblVersion = New System.Windows.Forms.Label()
+        Me.SekiroRadio = New System.Windows.Forms.RadioButton()
         Me.SuspendLayout()
         '
         'txtBNDfile
@@ -107,15 +108,27 @@ Partial Class Des_BNDBuild
         Me.lblVersion.Location = New System.Drawing.Point(912, 203)
         Me.lblVersion.Margin = New System.Windows.Forms.Padding(4, 0, 4, 0)
         Me.lblVersion.Name = "lblVersion"
-        Me.lblVersion.Size = New System.Drawing.Size(105, 17)
+        Me.lblVersion.Size = New System.Drawing.Size(82, 17)
         Me.lblVersion.TabIndex = 42
-        Me.lblVersion.Text = "20XX-12-02-01"
+        Me.lblVersion.Text = "2019-05-26"
+        '
+        'SekiroRadio
+        '
+        Me.SekiroRadio.AutoSize = True
+        Me.SekiroRadio.Location = New System.Drawing.Point(915, 145)
+        Me.SekiroRadio.Name = "SekiroRadio"
+        Me.SekiroRadio.Size = New System.Drawing.Size(98, 38)
+        Me.SekiroRadio.TabIndex = 43
+        Me.SekiroRadio.TabStop = True
+        Me.SekiroRadio.Text = "Sekiro " & Global.Microsoft.VisualBasic.ChrW(13) & Global.Microsoft.VisualBasic.ChrW(10) & "(BHD only)"
+        Me.SekiroRadio.UseVisualStyleBackColor = True
         '
         'Des_BNDBuild
         '
         Me.AutoScaleDimensions = New System.Drawing.SizeF(8.0!, 16.0!)
         Me.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font
         Me.ClientSize = New System.Drawing.Size(1023, 542)
+        Me.Controls.Add(Me.SekiroRadio)
         Me.Controls.Add(Me.lblVersion)
         Me.Controls.Add(Me.txtInfo)
         Me.Controls.Add(Me.btnRebuild)
@@ -127,7 +140,7 @@ Partial Class Des_BNDBuild
         Me.Margin = New System.Windows.Forms.Padding(4)
         Me.MinimumSize = New System.Drawing.Size(474, 211)
         Me.Name = "Des_BNDBuild"
-        Me.Text = "Wulf's BND Rebuilder BATCH PROCESSING"
+        Me.Text = "Wulf's BND Rebuilder 20XX Edition"
         Me.ResumeLayout(False)
         Me.PerformLayout()
 
@@ -139,5 +152,5 @@ Partial Class Des_BNDBuild
     Friend WithEvents btnExtract As System.Windows.Forms.Button
     Friend WithEvents txtInfo As System.Windows.Forms.TextBox
     Friend WithEvents lblVersion As System.Windows.Forms.Label
-
+    Friend WithEvents SekiroRadio As RadioButton
 End Class

@@ -114,5 +114,32 @@ Namespace My.Resources
                 Return ResourceManager.GetString("fileidx_ds3", resourceCulture)
             End Get
         End Property
+        
+        '''<summary>
+        '''  Looks up a localized string similar to /action/eventnameid.txt
+        '''/action/script/c0000.hks
+        '''/action/script/c0000_cmsg.hks
+        '''/action/script/c0000_define.hks
+        '''/action/script/c0000_transition.hks
+        '''/action/script/c0001.hks
+        '''/action/script/c1000.hks
+        '''/action/script/c1001.hks
+        '''/action/script/c1003.hks
+        '''/action/script/c1010.hks
+        '''/action/script/c1013.hks
+        '''/action/script/c1020.hks
+        '''/action/script/c1030.hks
+        '''/action/script/c1040.hks
+        '''/action/script/c1050.hks
+        '''/action/script/c1060.hks
+        '''/action/script/c1070.hks
+        '''/action/script/c1080.hks
+        '''/action/script/c1090.h [rest of string was truncated]&quot;;.
+        '''</summary>
+        Friend ReadOnly Property fileidx_sekiro() As String
+            Get
+                Return ResourceManager.GetString("fileidx_sekiro", resourceCulture)
+            End Get
+        End Property
     End Module
 End Namespace

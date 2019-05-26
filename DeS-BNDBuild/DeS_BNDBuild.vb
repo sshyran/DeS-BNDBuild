@@ -2,6 +2,7 @@
 Imports System.IO.Compression
 Imports System.Numerics
 Imports System.Threading
+Imports System.Runtime.Serialization.Formatters.Binary
 'Imports System.Security.Cryptography.RijndaelManaged
 Imports System.Security.Cryptography
 
@@ -12,6 +13,14 @@ Public Class Des_BNDBuild
     Public Shared filename As String
     Public Shared filepath As String
     Public Shared extractPath As String
+
+    'Stuff for (de)swizzling
+    Public Shared writeOffset As UInteger
+    Public Shared skipOffset As UInteger
+    Public Shared inBytes As Byte()
+    Public Shared outBytes As Byte()
+    Public Shared ddsWidth As UShort
+    Public Shared ddsBlockArray As Boolean()
 
     Public Shared bigEndian As Boolean = True
 
@@ -46,6 +55,47 @@ Public Class Des_BNDBuild
         Dim startOffset As Long
         Dim endOffset As Long
     End Structure
+
+    Public Structure DDS_HEADER
+        Dim dwSize As UInteger
+        Dim dwFlags As UInteger
+        Dim dwHeight As UInteger
+        Dim dwWidth As UInteger
+        Dim dwPitchOrLinearSize As UInteger
+        Dim dwDepth As UInteger
+        Dim dwMipMapCount As UInteger
+        Dim dwReserved1() As UInteger
+        Dim ddspf As DDS_PIXELFORMAT
+        Dim dwCaps As UInteger
+        Dim dwCaps2 As UInteger
+        Dim dwCaps3 As UInteger
+        Dim dwCaps4 As UInteger
+        Dim dwReserved2 As UInteger
+    End Structure
+
+    Public Structure DDS_PIXELFORMAT
+        Dim dwSize As UInteger
+        Dim dwFlags As UInteger
+        Dim dwFourCC As UInteger
+        Dim dwRGBBitCount As UInteger
+        Dim dwRBitMask As UInteger
+        Dim dwGBitMask As UInteger
+        Dim dwBBitMask As UInteger
+        Dim dwABitMask As UInteger
+    End Structure
+
+    Public Structure DDS_HEADER_DXT10
+        Dim dxgiFormat As UInteger
+        Dim resourceDimension As UInteger
+        Dim miscFlag As UInteger
+        Dim arraySize As UInteger
+        Dim miscFlags2 As UInteger
+    End Structure
+
+    Public Enum GAME_PLATFORM
+        PS3
+        PS4
+    End Enum
 
     Private WithEvents updateUITimer As New System.Windows.Forms.Timer()
 
@@ -145,6 +195,20 @@ Public Class Des_BNDBuild
         Return Str
     End Function
 
+    Private Function UInt16FromBytes(ByVal loc As UInteger) As UShort
+        Dim tmpUint As UInteger = 0
+        Dim bArr(1) As Byte
+
+        Array.Copy(bytes, loc, bArr, 0, 2)
+        If bigEndian Then
+            Array.Reverse(bArr)
+        End If
+
+        tmpUint = BitConverter.ToUInt16(bArr, 0)
+
+        Return tmpUint
+    End Function
+
     Private Function UIntFromBytes(ByVal loc As UInteger) As UInteger
         Dim tmpUint As UInteger = 0
         Dim bArr(3) As Byte
@@ -189,6 +253,19 @@ Public Class Des_BNDBuild
     Private Sub InsBytes(ByVal bytes2() As Byte, ByVal loc As Long)
         Array.Copy(bytes2, 0, bytes, loc, bytes2.Length)
     End Sub
+
+    Private Sub UInt16ToBytes(ByVal val As UInt16, loc As UInteger)
+
+        Dim bArr(1) As Byte
+
+        bArr = BitConverter.GetBytes(val)
+        If bigEndian Then
+            Array.Reverse(bArr)
+        End If
+
+        Array.Copy(bArr, 0, bytes, loc, 2)
+    End Sub
+
     Private Sub UIntToBytes(ByVal val As UInteger, loc As UInteger)
 
         Dim bArr(3) As Byte
@@ -243,6 +320,24 @@ Public Class Des_BNDBuild
         Next
 
         Return hash
+    End Function
+    Private Function DecryptSoundFile(ByRef soundBytes As Byte()) As Byte()
+        Dim key As Byte() = System.Text.Encoding.ASCII.GetBytes("G0KTrWjS9syqF7vVD6RaVXlFD91gMgkC")
+        Dim iv(15) As Byte ' = soundBytes.Take(16).ToArray()
+
+        Dim encBytes As Byte() = soundBytes
+
+        Dim ms As New MemoryStream()
+        Dim aes As New AesManaged() With {
+            .Mode = CipherMode.CBC,
+            .Padding = PaddingMode.Zeros
+        }
+        Dim cs As New CryptoStream(ms, aes.CreateDecryptor(key, iv), CryptoStreamMode.Write)
+
+        cs.Write(encBytes, 0, encBytes.Length)
+
+        cs.Dispose()
+        Return ms.ToArray()
     End Function
     Private Function DecryptRegulationFile(ByRef regBytes As Byte()) As Byte()
         Dim key As Byte() = System.Text.Encoding.ASCII.GetBytes("ds3#jn/8_7(rsY9pg55GFN7VFL#+3n/)")
@@ -302,7 +397,69 @@ Public Class Des_BNDBuild
             work = True
         End SyncLock
 
+        'Dim chars As String = "abcdefghijklmnopqrstuvwxyz_-."
+        'Dim chars2 As String = "abcdefghijklmnopqrstuvwxyz_-1234567890."
+
+        'For k = 0 To chars.Length - 1
+
+
+        '    For l = 0 To chars.Length - 1
+
+        '        For m = 0 To chars.Length - 1
+
+        '            For n = 0 To chars.Length - 1
+
+        '                For o = 0 To chars.Length - 1
+        '                    'If HashFileName("/font/" & chars(k) & chars(l) & chars(m) & chars(n) & chars(o) & "_map/font.gfx") = &H8486AB34 Then
+        '                    '    MsgBox("found it: " & chars(k) & chars(l) & chars(m) & chars(n) & chars(o))
+        '                    'End If
+        '                    HashFileName(chars(k) & chars(l) & chars(m) & chars(n) & chars(o))
+        '                    'If HashFileName("/font/" & chars(k) & chars(l) & chars(m) & chars(n) & chars(o) & "_std/font.gfx") = &H8486AB34 Then
+        '                    '    MsgBox("found it: " & chars(k) & chars(l) & chars(m) & chars(n) & chars(o))
+        '                    'End If
+        '                    'If HashFileName("/font/" & chars(k) & chars(l) & chars(m) & chars(n) & chars(o) & "_texteffect/font.gfx") = &H8486AB34 Then
+        '                    '    MsgBox("found it: " & chars(k) & chars(l) & chars(m) & chars(n) & chars(o))
+        '                    'End If
+        '                    For p = 0 To chars.Length - 1
+        '                        'If HashFileName("/font/rusru_" & chars(k) & chars(l) & chars(m) & chars(n) & chars(o) & chars(p) & "/font.gfx") = &H8486AB34 Then
+        '                        '    MsgBox("found it: " & chars(k) & chars(l) & chars(m) & chars(n) & chars(o) & chars(p))
+        '                        'End If
+        '                        For q = 0 To chars.Length - 1
+        '                            If HashFileName(chars(k) & chars(l) & chars(m) & chars(n) & chars(o) & chars(p) & chars(q)) = &H4528C031 Then
+        '                                MsgBox("found it: " & chars(k) & chars(l) & chars(m) & chars(n) & chars(o) & chars(p) & chars(q))
+        '                            End If
+        '                        Next
+
+        '                        '                    'if hashfilename("/parts/" & chars(k) & chars(l) & chars(m) & chars(n) & chars(o) & chars(p) & "/bd_a_underwear.dds") = &h8b4c5902 then
+        '                        '                    if hashfilename("/other/" & chars(k) & chars(l) & chars(m) & chars(n) & chars(o) & chars(p) & ".dcx") = &h8b4c5902 then
+        '                        '                        msgbox("found it: " & chars(k) & chars(l) & chars(m) & chars(n) & chars(o) & chars(p))
+        '                        '                    end if
+        '                    Next
+        '                Next
+        '            Next
+        '        Next
+        '    Next
+        '    output("once" & Environment.NewLine)
+        'Next
+
+        'For k = 0 To chars2.Length - 1
+        '    For l = 0 To chars2.Length - 1
+        '        For m = 0 To chars2.Length - 1
+        '            For n = 0 To chars2.Length - 1
+        '                For o = 0 To chars2.Length - 1
+        '                    'If HashFileName("/map/m17_00_00_00/m17_00_00_00_301010.mapbnd.dcx" & chars2(k) & chars2(l) & chars2(m) & chars2(n) & chars2(o)) = &HA28B84C8 Then
+        '                    '    MsgBox("found it: " & chars2(k)) '& chars2(l) & chars2(m) & chars2(n) & chars2(o))
+        '                    'End If
+        '                    If HashFileName("/map/m17_00_00_00/m17_00_00_00_301010.mapbnd.dcx" & chars2(k) & chars2(l) & chars2(m) & chars2(n) & chars2(o)) = &HA28B84C8 Then
+        '                        MsgBox("found it: " & chars2(k)) '& chars2(l) & chars2(m) & chars2(n) & chars2(o))
+        '                    End If
+        '                Next
+        '            Next
+        '        Next
+        '    Next
+        'Next
         'output(TimeOfDay & " - hash." & HashFileName(txtBNDfile.Lines(0)) & Environment.NewLine)
+        ''output("done" & Environment.NewLine)
         'SyncLock workLock
         '    work = False
         'End SyncLock
@@ -349,7 +506,6 @@ Public Class Des_BNDBuild
                     Return
                 End Try
 
-
                 output(TimeOfDay & " - Beginning extraction." & Environment.NewLine)
 
 
@@ -388,12 +544,17 @@ Public Class Des_BNDBuild
                                 output(TimeOfDay & " - " & filename & ".enc.bak already exists." & Environment.NewLine)
                             End If
                             output(TimeOfDay & " - Beginning decryption." & Environment.NewLine)
+                            Dim decStream
+                            If SekiroRadio.Checked Then
+                                decStream = New IO.FileStream(filepath & filename, IO.FileMode.Create)
+                            Else
+                                decStream = New IO.FileStream(filepath & archiveName & ".bhd", IO.FileMode.Create)
+                            End If
 
-                            Dim decStream As New IO.FileStream(filepath & archiveName & ".bhd", IO.FileMode.Create)
                             Dim idxSheet As ULong = 0
                             Dim diff As UInteger = 0
                             Dim countSheet As UInteger = 256
-                            Dim exp As New BigInteger(expDict(archiveName))
+                            Dim exp As New BigInteger(BitConverter.ToUInt32(expDict(archiveName), 0))
                             Dim modulus As New BigInteger(modDict(archiveName))
 
                             While idxSheet < bytes.Length
@@ -470,7 +631,7 @@ Public Class Des_BNDBuild
                             File.WriteAllText(filepath & filename & ".info.txt", fileList)
                             output(TimeOfDay & " - " & filename & " extracted." & Environment.NewLine)
 
-                            bytes = decbytes
+                            bytes = bytes2
                             filepath = currFilePath
                             filename = Microsoft.VisualBasic.Right(currFileName, currFileName.Length - filepath.Length)
 
@@ -592,7 +753,11 @@ Public Class Des_BNDBuild
                         Dim IsDS3 As Boolean = False
 
                         If flags = &H1FF Then
-                            fileidx = My.Resources.fileidx_ds3.Replace(Chr(&HD), "").Split(Chr(&HA))
+                            If SekiroRadio.Checked Then
+                                fileidx = My.Resources.fileidx_sekiro.Replace(Chr(&HD), "").Split(Chr(&HA))
+                            Else
+                                fileidx = My.Resources.fileidx_ds3.Replace(Chr(&HD), "").Split(Chr(&HA))
+                            End If
                             IsDS3 = True
                         Else
                             fileidx = My.Resources.fileidx.Replace(Chr(&HD), "").Split(Chr(&HA))
@@ -609,16 +774,6 @@ Public Class Des_BNDBuild
                         Else
                             filename = Microsoft.VisualBasic.Left(filename, filename.Length - 5)
                         End If
-
-
-                        'If Not File.Exists(filepath & filename & ".bdt.bak") Then
-                        '    File.Copy(filepath & filename & ".bdt", filepath & filename & ".bdt.bak")
-                        '    'txtInfo.Text += TimeOfDay & " - " & filename & ".bdt.bak created." & Environment.NewLine
-                        '    'output(TimeOfDay & " - " & filename & ".bdt.bak created." & Environment.NewLine)
-                        'Else
-                        '    'txtInfo.Text += TimeOfDay & " - " & filename & ".bdt.bak already exists." & Environment.NewLine
-                        '    'output(TimeOfDay & " - " & filename & ".bdt.bak already exists." & Environment.NewLine)
-                        'End If
 
                         Dim BDTStream As New IO.FileStream(filepath & filename & ".bdt", IO.FileMode.Open)
                         Dim bhdOffSet As UInteger
@@ -649,7 +804,6 @@ Public Class Des_BNDBuild
                         Dim filesDict As New Dictionary(Of ULong, String)
 
                         fileList = fileList & BinderID & Environment.NewLine & flags & "," & Convert.ToInt32(IsSwitch) & Environment.NewLine
-                        'Dim fileList2 As String = ""
 
                         For i As UInteger = 0 To numFiles - 1
 
@@ -719,6 +873,25 @@ Public Class Des_BNDBuild
                                         currFileSizeFinal = 76 + BitConverter.ToUInt32(tempBytes, 0)
 
                                     End If
+
+                                    'If currFileBytes.Length >= 8 Then
+                                    '    Dim firstBytes(7) As Byte
+                                    '    Array.Copy(currFileBytes, firstBytes, 8)
+                                    '    If UIntFromBytes(bhdOffSet) = &H57330360 Then
+                                    '        Dim equal As Boolean
+                                    '        For k = 0 To 7
+                                    '            If firstBytes(k) = currFileBytes(k) Then
+                                    '                equal = True
+                                    '            Else
+                                    '                equal = False
+                                    '                Exit For
+                                    '            End If
+                                    '        Next
+                                    '        If equal Then
+                                    '            currFileBytes = DecryptSoundFile(currFileBytes)
+                                    '        End If
+                                    '    End If
+                                    'End If
 
                                     If isEncrypted Then
                                         Dim aesKey(15) As Byte
@@ -1257,6 +1430,13 @@ Public Class Des_BNDBuild
                         Dim currFileBytes() As Byte = {}
                         Dim currFileFlags1 As UInteger = 0
                         Dim currFileFlags2 As UInteger = 0
+                        Dim currFileFormat As Byte = 0
+                        Dim currFileIsCubemap As Boolean = False
+                        Dim currFileMipMaps As UInteger = 0
+                        Dim currFileWidth As UInt16 = 0
+                        Dim currFileHeight As UInt16 = 0
+                        Dim bw As BinaryWriter
+                        Dim ddsHeader As DDS_HEADER
 
                         bigEndian = False
                         If UIntFromBytes(&H8) >= &H1000000 Then
@@ -1267,23 +1447,29 @@ Public Class Des_BNDBuild
 
                         flags = UIntFromBytes(&HC)
 
-                        If flags = &H2010200 Or flags = &H2010000 Then
-                            ' Demon's Souls (headerless DDS)
+                        If flags = &H2010200 Or flags = &H2010000 Or flags = &H2020200 Or flags = &H2030200 Then
+                            ' Dark Souls/Demon's Souls (headerless DDS)
 
                             BinderID = Microsoft.VisualBasic.Left(StrFromBytes(&H0), 3)
                             numFiles = UIntFromBytes(&H8)
-                            currFileNameOffset = UIntFromBytes(&H10)
 
                             fileList = BinderID & Environment.NewLine & flags & Environment.NewLine
 
                             For i As UInteger = 0 To numFiles - 1
+
+                                writeOffset = 0
                                 currFileOffset = UIntFromBytes(&H10 + i * &H20)
                                 currFileSize = UIntFromBytes(&H14 + i * &H20)
-                                currFileFlags1 = UIntFromBytes(&H18 + i * &H20)
-                                currFileFlags2 = UIntFromBytes(&H1C + i * &H20)
+                                currFileFormat = bytes(&H18 + i * &H20)
+                                currFileIsCubemap = bytes(&H19 + i * &H20)
+                                currFileMipMaps = bytes(&H1A + i * &H20)
+                                currFileWidth = UInt16FromBytes(&H1C + i * &H20)
+                                currFileHeight = UInt16FromBytes(&H1E + i * &H20)
+                                currFileFlags1 = UIntFromBytes(&H20 + i * &H20)
+                                currFileFlags2 = UIntFromBytes(&H24 + i * &H20)
                                 currFileNameOffset = UIntFromBytes(&H28 + i * &H20)
-                                currFileName = DecodeFileName(currFileNameOffset)
-                                fileList += currFileFlags1 & "," & currFileFlags2 & "," & currFileName & Environment.NewLine
+                                currFileName = DecodeFileName(currFileNameOffset) & ".dds"
+                                fileList += currFileFormat & "," & Convert.ToInt32(currFileIsCubemap) & "," & currFileMipMaps & "," & currFileFlags1 & "," & currFileFlags2 & "," & currFileName & Environment.NewLine
                                 currFileName = filepath & filename & ".extract\" & currFileName
                                 currFilePath = Microsoft.VisualBasic.Left(currFileName, InStrRev(currFileName, "\"))
                                 currFileName = Microsoft.VisualBasic.Right(currFileName, currFileName.Length - currFilePath.Length)
@@ -1292,10 +1478,158 @@ Public Class Des_BNDBuild
                                     System.IO.Directory.CreateDirectory(currFilePath)
                                 End If
 
-                                ReDim currFileBytes(currFileSize - 1)
-                                Array.Copy(bytes, currFileOffset, currFileBytes, 0, currFileSize)
-                                File.WriteAllBytes(currFilePath & currFileName, currFileBytes)
+
+                                ddsHeader = MakeDDSHeader(currFileFormat, currFileIsCubemap, currFileMipMaps, currFileHeight, currFileWidth)
+
+                                bw = New BinaryWriter(File.Open(currFilePath & currFileName, FileMode.Create))
+
+                                bw.Write(&H20534444)
+                                bw.Write(ddsHeader.dwSize)
+                                bw.Write(ddsHeader.dwFlags)
+                                bw.Write(ddsHeader.dwHeight)
+                                bw.Write(ddsHeader.dwWidth)
+                                bw.Write(ddsHeader.dwPitchOrLinearSize)
+                                bw.Write(ddsHeader.dwDepth)
+                                bw.Write(ddsHeader.dwMipMapCount)
+                                bw.Seek(&H4C, 0)
+                                bw.Write(ddsHeader.ddspf.dwSize)
+                                bw.Write(ddsHeader.ddspf.dwFlags)
+                                bw.Write(ddsHeader.ddspf.dwFourCC)
+                                bw.Write(ddsHeader.ddspf.dwRGBBitCount)
+                                bw.Write(ddsHeader.ddspf.dwRBitMask)
+                                bw.Write(ddsHeader.ddspf.dwGBitMask)
+                                bw.Write(ddsHeader.ddspf.dwBBitMask)
+                                bw.Write(ddsHeader.ddspf.dwABitMask)
+                                bw.Write(ddsHeader.dwCaps)
+                                bw.Write(ddsHeader.dwCaps2)
+                                bw.Seek(&H80, 0)
+
+                                If (currFileFormat = 10 Or currFileFormat = 9) Then
+                                    ddsWidth = currFileWidth
+                                    If currFileIsCubemap Then
+                                        ReDim inBytes(ddsHeader.dwPitchOrLinearSize * (4 / 3) - 1)
+                                        ReDim outBytes(ddsHeader.dwPitchOrLinearSize - 1)
+                                        ReDim currFileBytes(ddsHeader.dwPitchOrLinearSize * 6 - 1)
+                                        'Deswizzle cube faces separately
+                                        For j As UInteger = 0 To 5
+                                            Array.Copy(bytes, CType(currFileOffset + j * ddsHeader.dwPitchOrLinearSize * (4 / 3), UInteger), inBytes, 0, CType(ddsHeader.dwPitchOrLinearSize * (4 / 3), UInteger))
+                                            DeswizzleDDSBytes(currFileWidth, currFileHeight, 0, 2)
+                                            writeOffset = 0
+                                            Array.Copy(outBytes, 0, currFileBytes, j * ddsHeader.dwPitchOrLinearSize, ddsHeader.dwPitchOrLinearSize)
+                                        Next
+                                        bw.Write(currFileBytes)
+                                    Else
+                                        ReDim inBytes(currFileSize - 1)
+                                        ReDim outBytes(currFileSize * (3 / 4) - 1)
+                                        Array.Copy(bytes, currFileOffset, inBytes, 0, currFileSize)
+                                        DeswizzleDDSBytes(currFileWidth, currFileHeight, 0, 2)
+                                        bw.Write(outBytes)
+                                    End If
+                                ElseIf currFileIsCubemap Then
+                                    'This one has meme bytes
+                                    ReDim currFileBytes(currFileSize - 1)
+                                    Array.Copy(bytes, currFileOffset, currFileBytes, 0, currFileSize)
+                                    RemoveMemeBytes(currFileBytes)
+                                    bw.Write(currFileBytes)
+                                Else
+                                    ReDim currFileBytes(currFileSize - 1)
+                                    Array.Copy(bytes, currFileOffset, currFileBytes, 0, currFileSize)
+                                    bw.Write(currFileBytes)
+                                End If
+
+                                bw.Close()
                             Next
+
+                        ElseIf flags = &H1030200 Then
+                            ' Dark Souls (headerless DDS)
+
+                            BinderID = Microsoft.VisualBasic.Left(StrFromBytes(&H0), 3)
+                            numFiles = UIntFromBytes(&H8)
+
+                            fileList = BinderID & Environment.NewLine & flags & Environment.NewLine
+
+                            For i As UInteger = 0 To numFiles - 1
+
+                                writeOffset = 0
+                                currFileOffset = UIntFromBytes(&H10 + i * &H1C)
+                                currFileSize = UIntFromBytes(&H14 + i * &H1C)
+                                currFileFormat = bytes(&H18 + i * &H1C)
+                                currFileIsCubemap = bytes(&H19 + i * &H1C)
+                                currFileMipMaps = bytes(&H1A + i * &H1C)
+                                currFileWidth = UInt16FromBytes(&H1C + i * &H1C)
+                                currFileHeight = UInt16FromBytes(&H1E + i * &H1C)
+                                currFileFlags1 = UIntFromBytes(&H20 + i * &H1C)
+                                currFileNameOffset = UIntFromBytes(&H24 + i * &H1C)
+                                currFileName = DecodeFileName(currFileNameOffset) & ".dds"
+                                fileList += currFileFormat & "," & Convert.ToInt32(currFileIsCubemap) & "," & currFileMipMaps & "," & currFileFlags1 & "," & currFileName & Environment.NewLine
+                                currFileName = filepath & filename & ".extract\" & currFileName
+                                currFilePath = Microsoft.VisualBasic.Left(currFileName, InStrRev(currFileName, "\"))
+                                currFileName = Microsoft.VisualBasic.Right(currFileName, currFileName.Length - currFilePath.Length)
+
+                                If (Not System.IO.Directory.Exists(currFilePath)) Then
+                                    System.IO.Directory.CreateDirectory(currFilePath)
+                                End If
+
+
+                                ddsHeader = MakeDDSHeader(currFileFormat, currFileIsCubemap, currFileMipMaps, currFileHeight, currFileWidth)
+
+                                bw = New BinaryWriter(File.Open(currFilePath & currFileName, FileMode.Create))
+
+                                bw.Write(&H20534444)
+                                bw.Write(ddsHeader.dwSize)
+                                bw.Write(ddsHeader.dwFlags)
+                                bw.Write(ddsHeader.dwHeight)
+                                bw.Write(ddsHeader.dwWidth)
+                                bw.Write(ddsHeader.dwPitchOrLinearSize)
+                                bw.Write(ddsHeader.dwDepth)
+                                bw.Write(ddsHeader.dwMipMapCount)
+                                bw.Seek(&H4C, 0)
+                                bw.Write(ddsHeader.ddspf.dwSize)
+                                bw.Write(ddsHeader.ddspf.dwFlags)
+                                bw.Write(ddsHeader.ddspf.dwFourCC)
+                                bw.Write(ddsHeader.ddspf.dwRGBBitCount)
+                                bw.Write(ddsHeader.ddspf.dwRBitMask)
+                                bw.Write(ddsHeader.ddspf.dwGBitMask)
+                                bw.Write(ddsHeader.ddspf.dwBBitMask)
+                                bw.Write(ddsHeader.ddspf.dwABitMask)
+                                bw.Write(ddsHeader.dwCaps)
+                                bw.Write(ddsHeader.dwCaps2)
+                                bw.Seek(&H80, 0)
+
+                                If (currFileFormat = 10 Or currFileFormat = 9) Then
+                                    ddsWidth = currFileWidth
+                                    If currFileIsCubemap Then
+                                        ReDim inBytes(ddsHeader.dwPitchOrLinearSize * (4 / 3) - 1)
+                                        ReDim outBytes(ddsHeader.dwPitchOrLinearSize - 1)
+                                        ReDim currFileBytes(ddsHeader.dwPitchOrLinearSize * 6 - 1)
+                                        'Deswizzle cube faces separately
+                                        For j As UInteger = 0 To 5
+                                            Array.Copy(bytes, CType(currFileOffset + j * ddsHeader.dwPitchOrLinearSize * (4 / 3), UInteger), inBytes, 0, CType(ddsHeader.dwPitchOrLinearSize * (4 / 3), UInteger))
+                                            DeswizzleDDSBytes(currFileWidth, currFileHeight, 0, 2)
+                                            writeOffset = 0
+                                            Array.Copy(outBytes, 0, currFileBytes, j * ddsHeader.dwPitchOrLinearSize, ddsHeader.dwPitchOrLinearSize)
+                                        Next
+                                        bw.Write(currFileBytes)
+                                    Else
+                                        ReDim inBytes(currFileSize - 1)
+                                        ReDim outBytes(currFileSize * (3 / 4) - 1)
+                                        Array.Copy(bytes, currFileOffset, inBytes, 0, currFileSize)
+                                        DeswizzleDDSBytes(currFileWidth, currFileHeight, 0, 2)
+                                        bw.Write(outBytes)
+                                    End If
+                                ElseIf currFileIsCubemap Then
+                                    'This one has meme bytes
+                                    ReDim currFileBytes(currFileSize - 1)
+                                    Array.Copy(bytes, currFileOffset, currFileBytes, 0, currFileSize)
+                                    If currFileSize >= &H41B8 Then
+                                        RemoveMemeBytes(currFileBytes)
+                                    End If
+                                    bw.Write(currFileBytes)
+                                End If
+
+                                bw.Close()
+                            Next
+
                         ElseIf flags = &H20300 Or flags = &H20304 Then
                             ' Dark Souls
 
@@ -1324,9 +1658,6 @@ Public Class Des_BNDBuild
                                 Array.Copy(bytes, currFileOffset, currFileBytes, 0, currFileSize)
                                 File.WriteAllBytes(currFilePath & currFileName, currFileBytes)
                             Next
-                        ElseIf flags = &H2030200 Then
-                            ' Dark Souls/Demon's Souls (headerless DDS)
-                            output(TimeOfDay & " - TPF format not implemented" & Environment.NewLine)
                         ElseIf flags = &H10300 Then
                             ' Dark Souls III
 
@@ -1337,12 +1668,14 @@ Public Class Des_BNDBuild
                             For i As UInteger = 0 To numFiles - 1
                                 currFileOffset = UIntFromBytes(&H10 + i * &H14)
                                 currFileSize = UIntFromBytes(&H14 + i * &H14)
-                                currFileFlags1 = UIntFromBytes(&H18 + i * &H14)
+                                currFileFormat = bytes(&H18 + i * &H14)
+                                currFileIsCubemap = bytes(&H19 + i * &H14)
+                                currFileMipMaps = bytes(&H1A + i * &H14)
                                 currFileNameOffset = UIntFromBytes(&H1C + i * &H14)
-                                currFileFlags2 = UIntFromBytes(&H20 + i * &H14)
+                                currFileFlags1 = UIntFromBytes(&H20 + i * &H14)
 
                                 currFileName = DecodeFileNameBND4(currFileNameOffset) & ".dds"
-                                fileList += currFileFlags1 & "," & currFileFlags2 & "," & currFileName & Environment.NewLine
+                                fileList += currFileFormat & "," & Convert.ToInt32(currFileIsCubemap) & "," & currFileMipMaps & "," & currFileFlags1 & "," & currFileName & Environment.NewLine
                                 currFileName = filepath & filename & ".extract\" & currFileName
                                 currFilePath = Microsoft.VisualBasic.Left(currFileName, InStrRev(currFileName, "\"))
                                 currFileName = Microsoft.VisualBasic.Right(currFileName, currFileName.Length - currFilePath.Length)
@@ -1357,7 +1690,185 @@ Public Class Des_BNDBuild
                             Next
                         ElseIf flags = &H10304 Then
                             ' Dark Souls III (headerless DDS)
-                            output(TimeOfDay & " - TPF format not implemented" & Environment.NewLine)
+
+                            Dim currFileDxgiFormat As UInteger = 0
+                            Dim currFileArraySize As UInteger = 0
+                            Dim ddsDx10Header As DDS_HEADER_DXT10
+                            BinderID = Microsoft.VisualBasic.Left(StrFromBytes(&H0), 3)
+                            numFiles = UIntFromBytes(&H8)
+
+                            fileList = BinderID & Environment.NewLine & flags & Environment.NewLine
+
+                            For i As UInteger = 0 To numFiles - 1
+                                currFileOffset = UIntFromBytes(&H10 + i * &H24)
+                                currFileSize = UIntFromBytes(&H14 + i * &H24)
+                                currFileFormat = bytes(&H18 + i * &H24)
+                                currFileIsCubemap = bytes(&H19 + i * &H24)
+                                currFileMipMaps = bytes(&H1A + i * &H24)
+                                currFileWidth = UInt16FromBytes(&H1C + i * &H24)
+                                currFileHeight = UInt16FromBytes(&H1E + i * &H24)
+                                currFileArraySize = UIntFromBytes(&H20 + i * &H24)
+                                'unk always 0D?
+                                currFileNameOffset = UIntFromBytes(&H28 + i * &H24)
+                                currFileDxgiFormat = UIntFromBytes(&H30 + i * &H24)
+                                currFileName = DecodeFileNameBND4(currFileNameOffset) & ".dds"
+                                fileList += currFileFormat & "," & Convert.ToInt32(currFileIsCubemap) & "," & currFileMipMaps & "," & currFileArraySize & "," & currFileDxgiFormat & "," & currFileName & Environment.NewLine
+
+                                currFileName = filepath & filename & ".extract\" & currFileName
+                                currFilePath = Microsoft.VisualBasic.Left(currFileName, InStrRev(currFileName, "\"))
+                                currFileName = Microsoft.VisualBasic.Right(currFileName, currFileName.Length - currFilePath.Length)
+
+                                If (Not System.IO.Directory.Exists(currFilePath)) Then
+                                    System.IO.Directory.CreateDirectory(currFilePath)
+                                End If
+
+                                ddsHeader = MakeDDSHeaderPS4(currFileFormat, currFileIsCubemap, currFileMipMaps, currFileHeight, currFileWidth)
+                                ddsDx10Header = MakeDDSDX10Header(currFileDxgiFormat, currFileIsCubemap)
+
+                                bw = New BinaryWriter(File.Open(currFilePath & currFileName, FileMode.Create))
+
+                                bw.Write(&H20534444)
+                                bw.Write(ddsHeader.dwSize)
+                                bw.Write(ddsHeader.dwFlags)
+                                bw.Write(ddsHeader.dwHeight)
+                                bw.Write(ddsHeader.dwWidth)
+                                bw.Write(ddsHeader.dwPitchOrLinearSize)
+                                bw.Write(ddsHeader.dwDepth)
+                                bw.Write(ddsHeader.dwMipMapCount)
+                                bw.Seek(&H4C, 0)
+                                bw.Write(ddsHeader.ddspf.dwSize)
+                                bw.Write(ddsHeader.ddspf.dwFlags)
+                                bw.Write(ddsHeader.ddspf.dwFourCC)
+                                bw.Write(ddsHeader.ddspf.dwRGBBitCount)
+                                bw.Write(ddsHeader.ddspf.dwRBitMask)
+                                bw.Write(ddsHeader.ddspf.dwGBitMask)
+                                bw.Write(ddsHeader.ddspf.dwBBitMask)
+                                bw.Write(ddsHeader.ddspf.dwABitMask)
+                                bw.Write(ddsHeader.dwCaps)
+                                bw.Write(ddsHeader.dwCaps2)
+                                bw.Seek(&H80, 0)
+
+                                If currFileFormat <> 22 Then
+                                    bw.Write(ddsDx10Header.dxgiFormat)
+                                    bw.Write(ddsDx10Header.resourceDimension)
+                                    bw.Write(ddsDx10Header.miscFlag)
+                                    bw.Write(ddsDx10Header.arraySize)
+                                    bw.Write(ddsDx10Header.miscFlags2)
+                                End If
+
+
+                                ReDim currFileBytes(currFileSize - 1)
+                                Array.Copy(bytes, currFileOffset, currFileBytes, 0, currFileSize)
+
+
+                                Dim paddedWidth As UInteger = 0
+                                Dim paddedHeight As UInteger = 0
+                                Dim paddedSize As UInteger = 0
+                                Dim Width = currFileWidth
+                                Dim Height = currFileHeight
+                                Dim BlockSize As UInteger = 0
+                                Dim copyOffset = currFileOffset
+
+                                Select Case (currFileFormat)
+                                    Case 22, 25
+                                        BlockSize = 8
+                                    Case 0, 1, 103, 108, 109
+                                        BlockSize = 8
+                                    Case 5, 100, 102, 106, 107, 110
+                                        BlockSize = 16
+                                    Case Else
+                                        MsgBox("Format " & currFileFormat & " in file " & currFileName & " not implemented. Aborting :)")
+                                        SyncLock workLock
+                                            work = False
+                                        End SyncLock
+                                        bw.Close()
+                                        File.WriteAllText(filepath & filename & ".extract\filelist.txt", fileList)
+                                        Return
+                                End Select
+
+                                If currFileIsCubemap Then
+                                    For j As UInteger = 0 To currFileArraySize - 1
+                                        Width = currFileWidth
+                                        Height = currFileHeight
+                                        If currFileFormat = 22 Then
+                                            paddedWidth = Math.Ceiling(Width / 8) * 8
+                                            paddedHeight = Math.Ceiling(Height / 8) * 8
+                                            paddedSize = paddedWidth * paddedHeight * BlockSize
+                                        Else
+                                            paddedWidth = Math.Ceiling(Width / 32) * 32
+                                            paddedHeight = Math.Ceiling(Height / 32) * 32
+                                            paddedSize = Math.Ceiling(paddedWidth / 4) * Math.Ceiling(paddedHeight / 4) * BlockSize
+                                        End If
+
+                                        copyOffset = currFileOffset + paddedSize * j
+                                        For k As UInteger = 0 To ddsHeader.dwMipMapCount - 1
+                                            If k > 0 Then
+                                                If currFileFormat = 22 Then
+                                                    paddedWidth = Math.Ceiling(Width / 8) * 8
+                                                    paddedHeight = Math.Ceiling(Height / 8) * 8
+                                                    paddedSize = paddedWidth * paddedHeight * BlockSize
+                                                Else
+                                                    paddedWidth = Math.Ceiling(Width / 32) * 32
+                                                    paddedHeight = Math.Ceiling(Height / 32) * 32
+                                                    paddedSize = Math.Ceiling(paddedWidth / 4) * Math.Ceiling(paddedHeight / 4) * BlockSize
+                                                End If
+
+
+                                                copyOffset += paddedSize * j
+                                            End If
+
+                                            ReDim outBytes(paddedSize - 1)
+                                            ReDim inBytes(paddedSize - 1)
+                                            Array.Copy(bytes, copyOffset, inBytes, 0, paddedSize)
+                                            ddsWidth = paddedWidth
+                                            DeswizzleDDSBytesPS4(paddedWidth, paddedHeight, currFileFormat)
+
+                                            If currFileFormat = 22 Then
+                                                For l As UInteger = 0 To Height - 1
+                                                    bw.Write(outBytes, l * paddedWidth * BlockSize, Width * BlockSize)
+                                                Next
+                                            Else
+                                                For l As UInteger = 0 To Math.Ceiling(Height / 4) - 1
+                                                    bw.Write(outBytes, CType(l * Math.Ceiling(paddedWidth / 4) * BlockSize, UInteger), CType(Math.Ceiling(Width / 4) * BlockSize, UInteger))
+                                                Next
+                                            End If
+
+                                            copyOffset += (currFileArraySize - j) * paddedSize + paddedSize * 2
+
+                                            If Width > 1 Then
+                                                Width /= 2
+                                            End If
+                                            If Height > 1 Then
+                                                Height /= 2
+                                            End If
+                                        Next
+                                    Next
+                                Else
+                                    For j As UInteger = 0 To ddsHeader.dwMipMapCount - 1
+                                        paddedWidth = Math.Ceiling(Width / 32) * 32
+                                        paddedHeight = Math.Ceiling(Height / 32) * 32
+                                        paddedSize = Math.Ceiling(paddedWidth / 4) * Math.Ceiling(paddedHeight / 4) * BlockSize
+                                        ddsWidth = paddedWidth
+                                        ReDim inBytes(paddedSize - 1)
+                                        ReDim outBytes(paddedSize - 1)
+                                        Array.Copy(bytes, copyOffset, inBytes, 0, paddedSize)
+                                        DeswizzleDDSBytesPS4(paddedWidth, paddedHeight, currFileFormat)
+                                        For k As UInteger = 0 To Math.Ceiling(Height / 4) - 1
+                                            bw.Write(outBytes, CType(k * Math.Ceiling(paddedWidth / 4) * BlockSize, UInteger), CType(Math.Ceiling(Width / 4) * BlockSize, UInteger))
+                                        Next
+                                        copyOffset += paddedSize
+                                        If Width > 1 Then
+                                            Width /= 2
+                                        End If
+                                        If Height > 1 Then
+                                            Height /= 2
+                                        End If
+                                    Next
+                                End If
+
+
+                                bw.Close()
+                            Next
                         Else
                             output(TimeOfDay & " - Unknown TPF format" & Environment.NewLine)
                         End If
@@ -1444,7 +1955,7 @@ Public Class Des_BNDBuild
                         If archiveDict(firstBytes) = "Data0" Then
                             IsRegulation = True
                             filename = Microsoft.VisualBasic.Left(filename, filename.Length - 4) & ".bnd"
-                            MsgBox("Using a modified Data0.bdt (regulation file) online might get you banned. Proceed at your own risk.", MessageBoxIcon.Warning)
+                            MsgBox("Using a modified Data0.bdt (regulation file) online will get you banned. Proceed at your own risk.", MessageBoxIcon.Warning)
                         End If
                     End If
                 End If
@@ -1755,7 +2266,6 @@ Public Class Des_BNDBuild
 
                                 BDTStream.Position = bdtoffset
 
-                                'fStream.Close()
                                 fStream.Dispose()
                                 output(TimeOfDay & " - Added " & internalFileName & Environment.NewLine)
                             Next
@@ -2637,9 +3147,15 @@ Public Class Des_BNDBuild
 
                             flags = fileList(1)
 
-                            If flags = &H2010200 Or flags = &H201000 Then
-                                ' Demon's Souls (headerless DDS)
-                                'TODO:  Differentiate flag format differences
+                            If flags = &H2010200 Or flags = &H201000 Or flags = &H2020200 Or flags = &H2030200 Then
+                                ' Demon's Souls/Dark Souls (headerless DDS)
+
+                                Dim currFileFormat As UInteger = 0
+                                Dim currFileIsCubemap As Boolean = False
+                                Dim currFileMipMaps As UInteger = 0
+                                Dim currFileHeight As UShort = 0
+                                Dim currFileWidth As UShort = 0
+                                Dim cubeBytes() As Byte
 
                                 bigEndian = True
 
@@ -2648,7 +3164,7 @@ Public Class Des_BNDBuild
                                 namesEndLoc = &H10 + numFiles * &H20
 
                                 For i = 2 To fileList.Length - 1
-                                    namesEndLoc += EncodeFileName(fileList(i)).Length - InStrRev(fileList(i), ",") + 1
+                                    namesEndLoc += EncodeFileName(fileList(i)).Length - InStrRev(fileList(i), ",") - 3
                                 Next
 
                                 UIntToBytes(numFiles, &H8)
@@ -2668,40 +3184,96 @@ Public Class Des_BNDBuild
                                 currFileNameOffset = &H10 + &H20 * numFiles
 
                                 For i = 0 To numFiles - 1
-                                    currFileName = filepath & filename & ".extract\" & Microsoft.VisualBasic.Right(fileList(i + 2), fileList(i + 2).Length - (InStrRev(fileList(i + 2), ",")))
+
+                                    Dim FileInfo As String() = Split(fileList(i + 2), ",")
+
+                                    currFileFormat = Convert.ToUInt32(FileInfo(0))
+                                    currFileIsCubemap = Convert.ToUInt32(FileInfo(1))
+                                    currFileMipMaps = Convert.ToUInt32(FileInfo(2))
+                                    currFileFlags1 = Convert.ToUInt32(FileInfo(3))
+                                    currFileFlags2 = Convert.ToUInt32(FileInfo(4))
+                                    currFileName = filepath & filename & ".extract\" & FileInfo(5)
+
                                     tmpbytes = File.ReadAllBytes(currFileName)
 
-                                    currFileSize = tmpbytes.Length
+                                    currFileSize = tmpbytes.Length - &H80
+
+                                    currFileWidth = BitConverter.ToUInt16(tmpbytes, 12)
+                                    currFileHeight = BitConverter.ToUInt16(tmpbytes, 16)
+
+                                    If (currFileFormat = 10 Or currFileFormat = 9) Then
+                                        If currFileIsCubemap Then
+                                            Dim linearSize = BitConverter.ToUInt32(tmpbytes, 20)
+                                            ReDim outBytes(linearSize * (4 / 3) - 1)
+                                            ReDim cubeBytes(currFileSize * (4 / 3) - 1)
+                                            'Swizzle cube faces separately
+                                            For j As UInteger = 0 To 5
+                                                ReDim inBytes(linearSize - 1)
+                                                Array.Copy(tmpbytes, &H80 + j * linearSize, inBytes, 0, linearSize)
+                                                ExtendInBytes(True)
+                                                SwizzleDDSBytes(currFileWidth, currFileHeight, 0, 2)
+                                                writeOffset = 0
+                                                Array.Copy(outBytes, 0, cubeBytes, CType(j * linearSize * (4 / 3), UInteger), CType(linearSize * (4 / 3), UInteger))
+                                            Next
+                                            currFileSize = cubeBytes.Length
+                                        Else
+                                            ReDim inBytes(currFileSize - 1)
+                                            ReDim outBytes(currFileSize * (4 / 3) - 1)
+                                            ddsWidth = currFileWidth
+                                            Array.Copy(tmpbytes, &H80, inBytes, 0, currFileSize)
+                                            ExtendInBytes(False)
+                                            SwizzleDDSBytes(currFileWidth, currFileHeight, 0, 2)
+                                            currFileSize = outBytes.Length
+                                            writeOffset = 0
+                                        End If
+                                    ElseIf currFileIsCubemap Then
+                                        tmpbytes = tmpbytes.Skip(&H80).ToArray()
+                                        AddMemeBytes(tmpbytes)
+                                        currFileSize = tmpbytes.Length
+                                    Else
+                                        tmpbytes = tmpbytes.Skip(&H80).ToArray()
+                                    End If
+
                                     If currFileSize Mod &H10 > 0 Then
                                         padding = &H10 - (currFileSize Mod &H10)
                                     Else
                                         padding = 0
                                     End If
 
-                                    currFileFlags1 = Microsoft.VisualBasic.Left(fileList(i + 2), InStr(fileList(i + 2), ",") - 1)
-                                    currFileFlags2 = Microsoft.VisualBasic.Right(Microsoft.VisualBasic.Left(fileList(i + 2), InStrRev(fileList(i + 2), ",") - 1), Microsoft.VisualBasic.Left(fileList(i + 2), InStrRev(fileList(i + 2), ",") - 1).Length - InStr(Microsoft.VisualBasic.Left(fileList(i + 2), InStrRev(fileList(i + 2), ",") - 1), ","))
-
                                     UIntToBytes(currFileOffset, &H10 + i * &H20)
                                     UIntToBytes(currFileSize, &H14 + i * &H20)
-                                    UIntToBytes(currFileFlags1, &H18 + i * &H20)
-                                    UIntToBytes(currFileFlags2, &H1C + i * &H20)
+                                    bytes(&H18 + i * &H20) = currFileFormat
+                                    bytes(&H19 + i * &H20) = Convert.ToByte(currFileIsCubemap)
+                                    bytes(&H1A + i * &H20) = currFileMipMaps
+                                    UInt16ToBytes(currFileWidth, &H1C + i * &H20)
+                                    UInt16ToBytes(currFileHeight, &H1E + i * &H20)
+                                    UIntToBytes(currFileFlags1, &H20 + i * &H20)
+                                    UIntToBytes(currFileFlags2, &H24 + i * &H20)
                                     UIntToBytes(currFileNameOffset, &H28 + i * &H20)
 
                                     ReDim Preserve bytes(bytes.Length + currFileSize + padding - 1)
 
-                                    InsBytes(tmpbytes, currFileOffset)
+                                    If currFileFormat = 10 Or currFileFormat = 9 Then
+                                        If currFileIsCubemap Then
+                                            InsBytes(cubeBytes, currFileOffset)
+                                        Else
+                                            InsBytes(outBytes, currFileOffset)
+                                        End If
+                                    Else
+                                        InsBytes(tmpbytes, currFileOffset)
+                                    End If
 
                                     currFileOffset += currFileSize + padding
                                     totalFileSize += currFileSize
 
-                                    EncodeFileName(Microsoft.VisualBasic.Right(fileList(i + 2), fileList(i + 2).Length - (InStrRev(fileList(i + 2), ","))), currFileNameOffset)
-                                    currFileNameOffset += EncodeFileName(Microsoft.VisualBasic.Right(fileList(i + 2), fileList(i + 2).Length - (InStrRev(fileList(i + 2), ",")))).Length + 1
+                                    currFileName = FileInfo(5).Substring(0, FileInfo(5).Length - ".dds".Length)
+                                    EncodeFileName(currFileName, currFileNameOffset)
+                                    currFileNameOffset += EncodeFileName(currFileName).Length + 1
                                 Next
 
                                 UIntToBytes(totalFileSize, &H4)
                             ElseIf flags = &H20300 Or flags = &H20304 Then
                                 ' Dark Souls
-                                'TODO:  Fix this endian check in particular.
 
                                 bigEndian = False
 
@@ -2771,6 +3343,10 @@ Public Class Des_BNDBuild
                             ElseIf flags = &H10300 Then
                                 ' Dark Souls III
 
+                                Dim currFileFormat As UInteger = 0
+                                Dim currFileIsCubemap As Boolean = False
+                                Dim currFileMipMaps As UInteger = 0
+
                                 bigEndian = False
 
                                 numFiles = fileList.Length - 2
@@ -2814,14 +3390,18 @@ Public Class Des_BNDBuild
                                     'End If
 
                                     Dim words() As String = fileList(i + 2).Split(",")
-                                    currFileFlags1 = words(0)
-                                    currFileFlags2 = words(1)
+                                    currFileFormat = words(0)
+                                    currFileIsCubemap = words(1)
+                                    currFileMipMaps = words(2)
+                                    currFileFlags1 = words(3)
 
                                     UIntToBytes(currFileOffset, &H10 + i * &H14)
                                     UIntToBytes(currFileSize, &H14 + i * &H14)
-                                    UIntToBytes(currFileFlags1, &H18 + i * &H14)
+                                    bytes(&H18 + i * &H14) = currFileFormat
+                                    bytes(&H19 + i * &H14) = Convert.ToByte(currFileIsCubemap)
+                                    bytes(&H1A + i * &H14) = currFileMipMaps
                                     UIntToBytes(currFileNameOffset, &H1C + i * &H14)
-                                    UIntToBytes(currFileFlags2, &H20 + i * &H14)
+                                    UIntToBytes(currFileFlags1, &H20 + i * &H14)
 
                                     ReDim Preserve bytes(bytes.Length + currFileSize + padding - 1)
 
@@ -2836,9 +3416,222 @@ Public Class Des_BNDBuild
                                 Next
 
                                 UIntToBytes(totalFileSize, &H4)
+                            ElseIf flags = &H10304 Then
+                                ' Dark Souls III (headerless DDS)
+
+                                Dim currFileFormat As UInteger = 0
+                                Dim currFileIsCubemap As Boolean = False
+                                Dim currFileMipMaps As UInteger = 0
+                                Dim currFileArraySize As UInteger = 0
+                                Dim currFileDxgiFormat As UInteger = 0
+                                Dim currFileWidth As UShort = 0
+                                Dim currFileHeight As UShort = 0
+                                Dim paddedWidth As UInteger = 0
+                                Dim paddedHeight As UInteger = 0
+                                Dim paddedSize As UInteger = 0
+                                Dim Width As UInteger
+                                Dim Height As UInteger
+                                Dim BlockSize As UInteger = 0
+                                Dim copyOffset As UInteger = 0
+
+                                bigEndian = False
+
+                                numFiles = fileList.Length - 2
+
+                                namesEndLoc = &H10 + numFiles * &H24
+
+                                For i = 2 To fileList.Length - 1
+                                    currFileName = fileList(i)
+                                    currFileName = currFileName.Substring(InStrRev(currFileName, ","))
+                                    currFileName = currFileName.Substring(0, currFileName.Length - ".dds".Length)
+                                    namesEndLoc += EncodeFileNameBND4(currFileName).Length + 2
+                                Next
+
+                                UIntToBytes(numFiles, &H8)
+                                UIntToBytes(flags, &HC)
+
+                                If namesEndLoc Mod &H10 > 0 Then
+                                    padding = &H10 - (namesEndLoc Mod &H10)
+                                Else
+                                    padding = 0
+                                End If
+
+                                ReDim Preserve bytes(namesEndLoc + padding - 1)
+                                currFileOffset = namesEndLoc + padding
+
+                                currFileNameOffset = &H10 + &H24 * numFiles
+
+                                For i = 0 To numFiles - 1
+
+                                    Dim FileInfo As String() = Split(fileList(i + 2), ",")
+                                    Dim currMipMapOffset As UInteger = 0
+
+                                    currFileSize = 0
+                                    currFileFormat = Convert.ToUInt32(FileInfo(0))
+                                    currFileIsCubemap = Convert.ToUInt32(FileInfo(1))
+                                    currFileMipMaps = Convert.ToUInt32(FileInfo(2))
+                                    currFileArraySize = Convert.ToUInt32(FileInfo(3))
+                                    currFileDxgiFormat = Convert.ToUInt32(FileInfo(4))
+                                    currFileName = filepath & filename & ".extract\" & FileInfo(5)
+
+                                    tmpbytes = File.ReadAllBytes(currFilePath & currFileName)
+
+                                    currFileHeight = BitConverter.ToUInt16(tmpbytes, 12)
+                                    currFileWidth = BitConverter.ToUInt16(tmpbytes, 16)
+
+                                    Width = currFileWidth
+                                    Height = currFileHeight
+
+                                    If currFileFormat = 22 Then
+                                        copyOffset = &H80
+                                    Else
+                                        copyOffset = &H94
+                                    End If
+
+                                    Select Case (currFileFormat)
+                                        Case 22, 25
+                                            BlockSize = 8
+                                        Case 0, 1, 103, 108, 109
+                                            BlockSize = 8
+                                        Case 5, 100, 102, 106, 107, 110
+                                            BlockSize = 16
+                                        Case Else
+                                            MsgBox("Format " & currFileFormat & " in file " & currFileName & " not implemented. Aborting :)")
+                                            SyncLock workLock
+                                                work = False
+                                            End SyncLock
+                                            Return
+                                    End Select
+
+                                    If currFileIsCubemap Then
+                                        Dim ArrayEntrySize = 0
+                                        For j As UInteger = 0 To currFileMipMaps - 1
+                                            If currFileFormat = 22 Then
+                                                ArrayEntrySize += Width * Height * BlockSize
+                                            Else
+                                                ArrayEntrySize += Math.Ceiling(Width / 4) * Math.Ceiling(Height / 4) * BlockSize
+                                            End If
+
+                                            If Width > 1 Then
+                                                Width /= 2
+                                            End If
+                                            If Height > 1 Then
+                                                Height /= 2
+                                            End If
+                                        Next
+
+                                        Width = currFileWidth
+                                        Height = currFileHeight
+
+                                        For j As UInteger = 0 To currFileMipMaps - 1
+                                            If currFileFormat = 22 Then
+                                                paddedWidth = Math.Ceiling(Width / 8) * 8
+                                                paddedHeight = Math.Ceiling(Height / 8) * 8
+                                                paddedSize = paddedWidth * paddedHeight * BlockSize
+                                            Else
+                                                paddedWidth = Math.Ceiling(Width / 32) * 32
+                                                paddedHeight = Math.Ceiling(Height / 32) * 32
+                                                paddedSize = Math.Ceiling(paddedWidth / 4) * Math.Ceiling(paddedHeight / 4) * BlockSize
+                                            End If
+
+                                            ddsWidth = paddedWidth
+                                            ReDim outBytes(paddedSize - 1)
+                                            ReDim inBytes(paddedSize - 1)
+                                            ReDim Preserve bytes(bytes.Length + paddedSize * currFileArraySize + 2 * paddedSize - 1)
+
+                                            For k As UInteger = 0 To currFileArraySize - 1
+                                                Dim tempOffset = copyOffset
+
+                                                If currFileFormat = 22 Then
+                                                    For l As UInteger = 0 To Height - 1
+                                                        Array.Copy(tmpbytes, copyOffset, inBytes, l * paddedWidth * BlockSize, Width * BlockSize)
+                                                        copyOffset += Width * BlockSize
+                                                    Next
+                                                Else
+                                                    For l As UInteger = 0 To Math.Ceiling(Height / 4) - 1
+                                                        Array.Copy(tmpbytes, copyOffset, inBytes, CType(l * Math.Ceiling(paddedWidth / 4) * BlockSize, UInteger), CType(Math.Ceiling(Width / 4) * BlockSize, UInteger))
+                                                        copyOffset += Math.Ceiling(Width / 4) * BlockSize
+                                                    Next
+                                                End If
+
+                                                copyOffset = tempOffset
+
+                                                SwizzleDDSBytesPS4(paddedWidth, paddedHeight, currFileFormat)
+
+                                                InsBytes(outBytes, currFileOffset + currMipMapOffset)
+                                                currMipMapOffset += paddedSize
+                                                copyOffset += ArrayEntrySize
+                                            Next
+
+                                            currMipMapOffset += paddedSize * 2
+                                            copyOffset -= ArrayEntrySize * currFileArraySize
+
+                                            If currFileFormat = 22 Then
+                                                copyOffset += Width * Height * BlockSize
+                                            Else
+                                                copyOffset += Math.Ceiling(Width / 4) * Math.Ceiling(Height / 4) * BlockSize
+                                            End If
+
+                                            If Width > 1 Then
+                                                Width /= 2
+                                            End If
+                                            If Height > 1 Then
+                                                Height /= 2
+                                            End If
+                                        Next
+                                    Else
+                                        For j As UInteger = 0 To currFileMipMaps - 1
+                                            paddedWidth = Math.Ceiling(Width / 32) * 32
+                                            paddedHeight = Math.Ceiling(Height / 32) * 32
+                                            paddedSize = Math.Ceiling(paddedWidth / 4) * Math.Ceiling(paddedHeight / 4) * BlockSize
+                                            ddsWidth = paddedWidth
+                                            ReDim outBytes(paddedSize - 1)
+                                            ReDim inBytes(paddedSize - 1)
+
+                                            For k As UInteger = 0 To Math.Ceiling(Height / 4) - 1
+                                                Array.Copy(tmpbytes, copyOffset, inBytes, CType(k * Math.Ceiling(paddedWidth / 4) * BlockSize, UInteger), CType(Math.Ceiling(Width / 4) * BlockSize, UInteger))
+                                                copyOffset += Math.Ceiling(Width / 4) * BlockSize
+                                            Next
+
+                                            SwizzleDDSBytesPS4(Width, Height, currFileFormat)
+
+                                            ReDim Preserve bytes(bytes.Length + paddedSize - 1)
+
+                                            InsBytes(outBytes, currFileOffset + currMipMapOffset)
+                                            currMipMapOffset += paddedSize
+                                            If Width > 1 Then
+                                                Width /= 2
+                                            End If
+                                            If Height > 1 Then
+                                                Height /= 2
+                                            End If
+                                        Next
+                                    End If
+
+                                    currFileSize = currMipMapOffset
+                                    UIntToBytes(currFileOffset, &H10 + i * &H24)
+                                    UIntToBytes(currFileSize, &H14 + i * &H24)
+                                    bytes(&H18 + i * &H24) = currFileFormat
+                                    bytes(&H19 + i * &H24) = Convert.ToByte(currFileIsCubemap)
+                                    bytes(&H1A + i * &H24) = currFileMipMaps
+                                    UInt16ToBytes(currFileWidth, &H1C + i * &H24)
+                                    UInt16ToBytes(currFileHeight, &H1E + i * &H24)
+                                    UIntToBytes(currFileArraySize, &H20 + i * &H24)
+                                    UIntToBytes(&HD, &H24 + i * &H24)
+                                    UIntToBytes(currFileNameOffset, &H28 + i * &H24)
+
+                                    currFileName = FileInfo(5).Substring(0, FileInfo(5).Length - ".dds".Length)
+                                    EncodeFileNameBND4(currFileName, currFileNameOffset)
+                                    currFileNameOffset += EncodeFileNameBND4(currFileName).Length + 2
+
+                                    UIntToBytes(currFileDxgiFormat, &H30 + i * &H24)
+
+                                    currFileOffset += currMipMapOffset
+                                Next
+
+                                UIntToBytes(currFileOffset - namesEndLoc - padding, &H4)
+
                             End If
-
-
                     End Select
 
                     If Not IsRegulation Then
@@ -3067,7 +3860,7 @@ Public Class Des_BNDBuild
         Return (b << 16) Or a
     End Function
 
-    Public Function Compress(ByVal cmpBytes() As Byte, ByRef IsEDGE As Boolean) As Byte()
+    Public Function Compress(ByVal cmpBytes() As Byte, ByVal IsEDGE As Boolean) As Byte()
         Dim ms As New MemoryStream()
         Dim zipStream As Stream = Nothing
 
@@ -3091,9 +3884,540 @@ Public Class Des_BNDBuild
         Return outBytes
     End Function
 
+    Private Function MakeDDSHeader(format As UInteger, IsCubemap As Boolean, mipMapCount As UInteger, height As UInteger, width As UInteger) As DDS_HEADER
+        Dim ddsHeader As New DDS_HEADER
+        ReDim ddsHeader.dwReserved1(10)
+        ddsHeader.dwSize = &H7C
+        ddsHeader.dwFlags = &HA1007
+        ddsHeader.dwHeight = height
+        ddsHeader.dwWidth = width
+
+        Select Case format
+            Case 0, 1
+                'DXT1, DXT1A
+                ddsHeader.ddspf.dwFourCC = &H31545844
+                ddsHeader.dwPitchOrLinearSize = (height / 4) * (width / 4) * 8
+                ddsHeader.ddspf.dwFlags = 4
+                ddsHeader.ddspf.dwRGBBitCount = 0
+                ddsHeader.ddspf.dwRBitMask = 0
+                ddsHeader.ddspf.dwGBitMask = 0
+                ddsHeader.ddspf.dwBBitMask = 0
+            Case 5
+                'DXT5
+                ddsHeader.ddspf.dwFourCC = &H35545844
+                ddsHeader.dwPitchOrLinearSize = (height / 4) * (width / 4) * 16
+                ddsHeader.ddspf.dwFlags = 4
+                ddsHeader.ddspf.dwRGBBitCount = 0
+                ddsHeader.ddspf.dwRBitMask = 0
+                ddsHeader.ddspf.dwGBitMask = 0
+                ddsHeader.ddspf.dwBBitMask = 0
+            Case 9, 10
+                'Uncompressed?
+                'This needs deswizzling
+                ddsHeader.ddspf.dwFourCC = 0
+                ddsHeader.dwPitchOrLinearSize = (height * width) * 3
+                ddsHeader.ddspf.dwFlags = &H40
+                ddsHeader.ddspf.dwRGBBitCount = &H18
+                ddsHeader.ddspf.dwRBitMask = &HFF0000
+                ddsHeader.ddspf.dwGBitMask = &HFF00
+                ddsHeader.ddspf.dwBBitMask = &HFF
+            Case Else
+                '???
+        End Select
+
+        If IsCubemap Then
+            ddsHeader.dwCaps2 = &HFE00
+        Else
+            ddsHeader.dwCaps2 = 0
+        End If
+
+        If mipMapCount Then
+            ddsHeader.dwMipMapCount = mipMapCount
+        Else
+            ddsHeader.dwMipMapCount = 1 + Math.Floor(Math.Log(Math.Max(ddsHeader.dwWidth, ddsHeader.dwHeight), 2))
+        End If
+
+        ddsHeader.ddspf.dwSize = &H20
+
+        ddsHeader.dwCaps = &H401008
+        Return ddsHeader
+    End Function
+
+    Private Function MakeDDSHeaderPS4(format As UInteger, IsCubemap As Boolean, mipMapCount As UInteger, height As UInteger, width As UInteger) As DDS_HEADER
+        Dim ddsHeader As New DDS_HEADER
+        ReDim ddsHeader.dwReserved1(10)
+        ddsHeader.dwSize = &H7C
+        ddsHeader.dwFlags = &HA1007
+        ddsHeader.dwHeight = height
+        ddsHeader.dwWidth = width
+
+        Select Case format
+            Case 0, 1, 25, 103, 108, 109
+                ddsHeader.ddspf.dwFourCC = &H30315844
+                ddsHeader.dwPitchOrLinearSize = (height / 4) * (width / 4) * 8
+                ddsHeader.ddspf.dwFlags = 4
+                ddsHeader.ddspf.dwRGBBitCount = 0
+                ddsHeader.ddspf.dwRBitMask = 0
+                ddsHeader.ddspf.dwGBitMask = 0
+                ddsHeader.ddspf.dwBBitMask = 0
+            Case 5, 100, 102, 106, 107, 110
+                ddsHeader.ddspf.dwFourCC = &H30315844
+                ddsHeader.dwPitchOrLinearSize = (height / 4) * (width / 4) * 16
+                ddsHeader.ddspf.dwFlags = 4
+                ddsHeader.ddspf.dwRGBBitCount = 0
+                ddsHeader.ddspf.dwRBitMask = 0
+                ddsHeader.ddspf.dwGBitMask = 0
+                ddsHeader.ddspf.dwBBitMask = 0
+            Case 22
+                ddsHeader.ddspf.dwFourCC = &H71
+                ddsHeader.dwPitchOrLinearSize = (height / 4) * (width / 4) * 8
+                ddsHeader.ddspf.dwFlags = 4
+                ddsHeader.ddspf.dwRGBBitCount = 0
+                ddsHeader.ddspf.dwRBitMask = 0
+                ddsHeader.ddspf.dwGBitMask = 0
+                ddsHeader.ddspf.dwBBitMask = 0
+        End Select
+
+        ddsHeader.dwDepth = 1
+
+        If IsCubemap Then
+            ddsHeader.dwCaps2 = &HFE00
+        Else
+            ddsHeader.dwCaps2 = 0
+        End If
+
+        If mipMapCount Then
+            ddsHeader.dwMipMapCount = mipMapCount
+        Else
+            ddsHeader.dwMipMapCount = 1 + Math.Floor(Math.Log(Math.Max(ddsHeader.dwWidth, ddsHeader.dwHeight), 2))
+        End If
+
+        ddsHeader.ddspf.dwSize = &H20
+
+        ddsHeader.dwCaps = &H401008
+
+        Return ddsHeader
+    End Function
+
+    Private Function MakeDDSDX10Header(dxgiFormat As UInteger, IsCubemap As Boolean) As DDS_HEADER_DXT10
+        Dim ddsDx10Header As New DDS_HEADER_DXT10
+
+        ddsDx10Header.dxgiFormat = dxgiFormat
+        ddsDx10Header.resourceDimension = 3
+        If IsCubemap Then
+            ddsDx10Header.miscFlag = 4
+            ddsDx10Header.arraySize = 6
+        Else
+            ddsDx10Header.miscFlag = 0
+            ddsDx10Header.arraySize = 1
+        End If
+        ddsDx10Header.miscFlags2 = 0
+
+        Return ddsDx10Header
+    End Function
+
+    Private Sub DeswizzleDDSBytes(Width As UInteger, Height As UInteger, offset As UInteger, offsetFactor As UInteger)
+        If (Width * Height > 4) Then
+            DeswizzleDDSBytes(Width / 2, Height / 2, offset, offsetFactor * 2)
+            DeswizzleDDSBytes(Width / 2, Height / 2, offset + (Width / 2), offsetFactor * 2)
+            DeswizzleDDSBytes(Width / 2, Height / 2, offset + ((Width / 2) * (Height / 2) * offsetFactor), offsetFactor * 2)
+            DeswizzleDDSBytes(Width / 2, Height / 2, offset + ((Width / 2) * (Height / 2) * offsetFactor) + (Width / 2), offsetFactor * 2)
+        Else
+            outBytes(offset * 3) = inBytes(writeOffset + 3)
+            outBytes(offset * 3 + 1) = inBytes(writeOffset + 2)
+            outBytes(offset * 3 + 2) = inBytes(writeOffset + 1)
+
+            outBytes(offset * 3 + 3) = inBytes(writeOffset + 7)
+            outBytes(offset * 3 + 4) = inBytes(writeOffset + 6)
+            outBytes(offset * 3 + 5) = inBytes(writeOffset + 5)
+
+            outBytes(offset * 3 + ddsWidth * 3) = inBytes(writeOffset + 11)
+            outBytes(offset * 3 + ddsWidth * 3 + 1) = inBytes(writeOffset + 10)
+            outBytes(offset * 3 + ddsWidth * 3 + 2) = inBytes(writeOffset + 9)
+
+            outBytes(offset * 3 + ddsWidth * 3 + 3) = inBytes(writeOffset + 15)
+            outBytes(offset * 3 + ddsWidth * 3 + 4) = inBytes(writeOffset + 14)
+            outBytes(offset * 3 + ddsWidth * 3 + 5) = inBytes(writeOffset + 13)
+
+            writeOffset += 16
+        End If
+    End Sub
+
+    Private Sub SwizzleDDSBytes(Width As UShort, Height As UShort, offset As UInteger, offsetFactor As UInteger)
+        If (Width * Height > 4) Then
+            SwizzleDDSBytes(Width / 2, Height / 2, offset, offsetFactor * 2)
+            SwizzleDDSBytes(Width / 2, Height / 2, offset + (Width / 2), offsetFactor * 2)
+            SwizzleDDSBytes(Width / 2, Height / 2, offset + ((Width / 2) * (Height / 2) * offsetFactor), offsetFactor * 2)
+            SwizzleDDSBytes(Width / 2, Height / 2, offset + ((Width / 2) * (Height / 2) * offsetFactor) + (Width / 2), offsetFactor * 2)
+        Else
+            outBytes(writeOffset + 3) = inBytes(offset * 4)
+            outBytes(writeOffset + 2) = inBytes(offset * 4 + 1)
+            outBytes(writeOffset + 1) = inBytes(offset * 4 + 2)
+            outBytes(writeOffset) = inBytes(offset * 4 + 3)
+
+            outBytes(writeOffset + 7) = inBytes(offset * 4 + 4)
+            outBytes(writeOffset + 6) = inBytes(offset * 4 + 5)
+            outBytes(writeOffset + 5) = inBytes(offset * 4 + 6)
+            outBytes(writeOffset + 4) = inBytes(offset * 4 + 7)
+
+            outBytes(writeOffset + 11) = inBytes(offset * 4 + ddsWidth * 4)
+            outBytes(writeOffset + 10) = inBytes(offset * 4 + ddsWidth * 4 + 1)
+            outBytes(writeOffset + 9) = inBytes(offset * 4 + ddsWidth * 4 + 2)
+            outBytes(writeOffset + 8) = inBytes(offset * 4 + ddsWidth * 4 + 3)
+
+            outBytes(writeOffset + 15) = inBytes(offset * 4 + ddsWidth * 4 + 4)
+            outBytes(writeOffset + 14) = inBytes(offset * 4 + ddsWidth * 4 + 5)
+            outBytes(writeOffset + 13) = inBytes(offset * 4 + ddsWidth * 4 + 6)
+            outBytes(writeOffset + 12) = inBytes(offset * 4 + ddsWidth * 4 + 7)
+
+            writeOffset += 16
+        End If
+    End Sub
+
+    'Private Sub DeswizzleDDSBytesPS4Uncompressed(Width As UInteger, Height As UInteger, offset As UInteger, offsetFactor As UInteger)
+    '    If (Width * Height > 4) Then
+    '        DeswizzleDDSBytesPS4Uncompressed(Width / 2, Height / 2, offset, offsetFactor * 2)
+    '        DeswizzleDDSBytesPS4Uncompressed(Width / 2, Height / 2, offset + (Width / 2), offsetFactor * 2)
+    '        DeswizzleDDSBytesPS4Uncompressed(Width / 2, Height / 2, offset + ((Width / 2) * (Height / 2) * offsetFactor), offsetFactor * 2)
+    '        DeswizzleDDSBytesPS4Uncompressed(Width / 2, Height / 2, offset + ((Width / 2) * (Height / 2) * offsetFactor) + (Width / 2), offsetFactor * 2)
+    '    Else
+    '        If Not ddsBlockArray(offset * 8 / 16) And offset * 8 < outBytes.Length Then
+
+    '            For i As UInteger = 0 To 15
+    '                outBytes(offset * 8 + i) = inBytes(writeOffset + i)
+    '            Next
+
+
+    '            writeOffset += 16
+
+
+    '            For i As UInteger = 0 To 15
+    '                outBytes(offset * 8 + ddsWidth * 8 + i) = inBytes(writeOffset + i)
+    '            Next
+    '            ddsBlockArray(offset * 8 / 16) = True
+    '            ddsBlockArray((offset * 8 + ddsWidth * 8) / 16) = True
+
+    '            writeOffset += 16
+    '        Else
+
+    '            writeOffset += 32
+    '        End If
+
+    '    End If
+    'End Sub
+
+    Private Sub DeswizzleDDSBytesPS4RGBA(Width As UInteger, Height As UInteger, offset As UInteger, offsetFactor As UInteger)
+        If (Width * Height > 4) Then
+            DeswizzleDDSBytesPS4RGBA(Width / 2, Height / 2, offset, offsetFactor * 2)
+            DeswizzleDDSBytesPS4RGBA(Width / 2, Height / 2, offset + (Width / 2), offsetFactor * 2)
+            DeswizzleDDSBytesPS4RGBA(Width / 2, Height / 2, offset + ((Width / 2) * (Height / 2) * offsetFactor), offsetFactor * 2)
+            DeswizzleDDSBytesPS4RGBA(Width / 2, Height / 2, offset + ((Width / 2) * (Height / 2) * offsetFactor) + (Width / 2), offsetFactor * 2)
+        Else
+            For i As UInteger = 0 To 15
+                outBytes(offset * 8 + i) = inBytes(writeOffset + i)
+            Next
+
+            writeOffset += 16
+
+            For i As UInteger = 0 To 15
+                outBytes(offset * 8 + ddsWidth * 8 + i) = inBytes(writeOffset + i)
+            Next
+
+            writeOffset += 16
+        End If
+    End Sub
+
+    'Private Sub DeswizzleDDSBytesPS4(Width As UInteger, Height As UInteger, offset As UInteger, offsetFactor As UInteger, format As UInteger)
+    '    Dim BlockSize As UInteger
+    '    Select Case (format)
+    '        Case 0, 1, 25, 103, 108, 109
+    '            BlockSize = 8
+    '        Case 5, 100, 102, 106, 107, 110
+    '            BlockSize = 16
+    '    End Select
+
+    '    If (Width * Height > 16) Then
+    '        DeswizzleDDSBytesPS4(Width / 2, Height / 2, offset, offsetFactor * 2, format)
+    '        DeswizzleDDSBytesPS4(Width / 2, Height / 2, offset + (Width / 8) * BlockSize, offsetFactor * 2, format)
+    '        If ddsWidth < 4 Then
+    '            DeswizzleDDSBytesPS4(Width / 2, Height / 2, offset + ((4 / 8) * (Height / 4) * BlockSize), offsetFactor * 2, format)
+    '            DeswizzleDDSBytesPS4(Width / 2, Height / 2, offset + (4 / 8) * (Height / 4) * BlockSize + (Width / 8) * BlockSize, offsetFactor * 2, format)
+    '        Else
+    '            DeswizzleDDSBytesPS4(Width / 2, Height / 2, offset + ((ddsWidth / 8) * (Height / 4) * BlockSize), offsetFactor * 2, format)
+    '            DeswizzleDDSBytesPS4(Width / 2, Height / 2, offset + (ddsWidth / 8) * (Height / 4) * BlockSize + (Width / 8) * BlockSize, offsetFactor * 2, format)
+    '        End If
+
+    '    Else
+    '        If (offset < outBytes.Length) Then
+    '            If Not ddsBlockArray(offset / BlockSize) Then
+    '                Dim ZeroCount = 0
+    '                For i As UInteger = 0 To BlockSize - 1
+    '                    If inBytes(writeOffset + i) = 0 Then
+    '                        ZeroCount += 1
+    '                    End If
+    '                Next
+    '                If ZeroCount <> BlockSize Then
+    '                    For i As UInteger = 0 To BlockSize - 1
+    '                        outBytes(offset + i) = inBytes(writeOffset)
+    '                        writeOffset += 1
+    '                    Next
+    '                    ddsBlockArray(offset / BlockSize) = True
+    '                Else
+    '                    writeOffset += BlockSize
+    '                End If
+
+    '            Else
+    '                writeOffset += BlockSize
+    '            End If
+
+    '        Else
+    '            writeOffset += BlockSize
+    '        End If
+
+
+    '    End If
+    'End Sub
+
+    Private Sub DeswizzleDDSBytesPS4(Width As UInteger, Height As UInteger, offset As UInteger, offsetFactor As UInteger, format As UInteger)
+        Dim BlockSize As UInteger
+        Select Case (format)
+            Case 0, 1, 25, 103, 108, 109
+                BlockSize = 8
+            Case 5, 100, 102, 106, 107, 110
+                BlockSize = 16
+        End Select
+
+        If (Width * Height > 16) Then
+            DeswizzleDDSBytesPS4(Width / 2, Height / 2, offset, offsetFactor * 2, format)
+            DeswizzleDDSBytesPS4(Width / 2, Height / 2, offset + (Width / 8) * BlockSize, offsetFactor * 2, format)
+            DeswizzleDDSBytesPS4(Width / 2, Height / 2, offset + ((ddsWidth / 8) * (Height / 4) * BlockSize), offsetFactor * 2, format)
+            DeswizzleDDSBytesPS4(Width / 2, Height / 2, offset + (ddsWidth / 8) * (Height / 4) * BlockSize + (Width / 8) * BlockSize, offsetFactor * 2, format)
+        Else
+            For i As UInteger = 0 To BlockSize - 1
+                outBytes(offset + i) = inBytes(writeOffset)
+                writeOffset += 1
+            Next
+        End If
+
+    End Sub
+
+    Private Sub DeswizzleDDSBytesPS4(Width As UInteger, Height As UInteger, Format As UInteger)
+        Dim BlockSize As UInteger = 0
+        Select Case (Format)
+            Case 22
+                BlockSize = 8
+            Case 0, 1, 25, 103, 108, 109
+                BlockSize = 8
+            Case 5, 100, 102, 106, 107, 110
+                BlockSize = 16
+        End Select
+        'If Format <> 22 And Width <= 4 And Height <= 4 Then
+        '    For i As UInteger = 0 To BlockSize - 1
+        '        outBytes(i) = inBytes(i)
+        '    Next
+        '    Return
+        'End If
+        'If Format = 22 And Width <= 2 And Height = 1 Then
+        '    For i As UInteger = 0 To Width * 8 - 1
+        '        outBytes(i) = inBytes(i)
+        '    Next
+        '    Return
+        'End If
+        Dim SwizzleBlockSize As UInteger = 0
+
+        Dim BlocksH As UInteger
+        Dim BlocksV As UInteger
+        If Format = 22 Then
+            BlocksH = (Width + 7) \ 8
+            BlocksV = (Height + 7) \ 8
+            SwizzleBlockSize = 8
+        Else
+            BlocksH = (Width + 31) \ 32
+            BlocksV = (Height + 31) \ 32
+            SwizzleBlockSize = 32
+        End If
+
+        Dim h As UInteger = 0
+        Dim v As UInteger = 0
+        Dim offset As UInteger = 0
+
+        If Format = 22 Then
+            DeswizzleDDSBytesPS4RGBA(Width, Height, 0, 2) 'not sure if this works for images larger than 8x8
+            writeOffset = 0
+            Return
+        End If
+
+        For i As UInteger = 0 To BlocksV - 1
+            h = 0
+            For j As UInteger = 0 To BlocksH - 1
+                offset = h + v
+
+                DeswizzleDDSBytesPS4(32, 32, offset, 2, Format)
+
+                h += (SwizzleBlockSize / 4) * BlockSize
+                SwizzleBlockSize = 32
+            Next
+            If BlockSize = 8 Then
+                v += SwizzleBlockSize * Width / 2
+            Else
+                v += SwizzleBlockSize * Width
+            End If
+
+        Next
+
+        writeOffset = 0
+    End Sub
+
+    Private Sub SwizzleDDSBytesPS4(Width As UInteger, Height As UInteger, Format As UInteger)
+        Dim BlockSize As UInteger = 0
+        Select Case (Format)
+            Case 22
+                BlockSize = 8
+            Case 0, 1, 25, 103, 108, 109
+                BlockSize = 8
+            Case 5, 100, 102, 106, 107, 110
+                BlockSize = 16
+        End Select
+        'If Format <> 22 And Width <= 4 And Height <= 4 Then
+        '    For i As UInteger = 0 To BlockSize - 1
+        '        outBytes(i) = inBytes(i)
+        '    Next
+        '    Return
+        'End If
+        'If Format = 22 And Width <= 2 And Height = 1 Then
+        '    For i As UInteger = 0 To Width * 8 - 1
+        '        outBytes(i) = inBytes(i)
+        '    Next
+        '    Return
+        'End If
+        Dim SwizzleBlockSize As UInteger = 0
+
+        Dim BlocksH As UInteger
+        Dim BlocksV As UInteger
+        If Format = 22 Then
+            BlocksH = (Width + 7) \ 8
+            BlocksV = (Height + 7) \ 8
+            SwizzleBlockSize = 8
+        Else
+            BlocksH = (Width + 31) \ 32
+            BlocksV = (Height + 31) \ 32
+            SwizzleBlockSize = 32
+        End If
+
+        Dim h As UInteger = 0
+        Dim v As UInteger = 0
+        Dim offset As UInteger = 0
+
+        If Format = 22 Then
+            SwizzleDDSBytesPS4RGBA(8, 8, 0, 2) 'not sure if this works for images larger than 8x8
+            writeOffset = 0
+            Return
+        End If
+
+        For i As UInteger = 0 To BlocksV - 1
+            h = 0
+            For j As UInteger = 0 To BlocksH - 1
+                offset = h + v
+
+                SwizzleDDSBytesPS4(32, 32, offset, 2, Format)
+
+                h += (SwizzleBlockSize / 4) * BlockSize
+                SwizzleBlockSize = 32
+            Next
+            If BlockSize = 8 Then
+                v += SwizzleBlockSize * Width / 2
+            Else
+                v += SwizzleBlockSize * Width
+            End If
+        Next
+
+        writeOffset = 0
+    End Sub
+
+    Private Sub SwizzleDDSBytesPS4(Width As UInteger, Height As UInteger, offset As UInteger, offsetFactor As UInteger, format As UInteger)
+        Dim BlockSize As UInteger
+        Select Case (format)
+            Case 0, 1, 25, 103, 108, 109
+                BlockSize = 8
+            Case 5, 100, 102, 106, 107, 110
+                BlockSize = 16
+        End Select
+
+        If (Width * Height > 16) Then
+            SwizzleDDSBytesPS4(Width / 2, Height / 2, offset, offsetFactor * 2, format)
+            SwizzleDDSBytesPS4(Width / 2, Height / 2, offset + (Width / 8) * BlockSize, offsetFactor * 2, format)
+            SwizzleDDSBytesPS4(Width / 2, Height / 2, offset + ((ddsWidth / 8) * (Height / 4) * BlockSize), offsetFactor * 2, format)
+            SwizzleDDSBytesPS4(Width / 2, Height / 2, offset + (ddsWidth / 8) * (Height / 4) * BlockSize + (Width / 8) * BlockSize, offsetFactor * 2, format)
+        Else
+            For i As UInteger = 0 To BlockSize - 1
+                outBytes(writeOffset) = inBytes(offset + i)
+                writeOffset += 1
+            Next
+        End If
+    End Sub
+
+    Private Sub SwizzleDDSBytesPS4RGBA(Width As UInteger, Height As UInteger, offset As UInteger, offsetFactor As UInteger)
+        If (Width * Height > 4) Then
+            SwizzleDDSBytesPS4RGBA(Width / 2, Height / 2, offset, offsetFactor * 2)
+            SwizzleDDSBytesPS4RGBA(Width / 2, Height / 2, offset + (Width / 2), offsetFactor * 2)
+            SwizzleDDSBytesPS4RGBA(Width / 2, Height / 2, offset + ((Width / 2) * (Height / 2) * offsetFactor), offsetFactor * 2)
+            SwizzleDDSBytesPS4RGBA(Width / 2, Height / 2, offset + ((Width / 2) * (Height / 2) * offsetFactor) + (Width / 2), offsetFactor * 2)
+        Else
+            For i As UInteger = 0 To 15
+                outBytes(writeOffset + i) = inBytes(offset * 8 + i)
+            Next
+
+            writeOffset += 16
+
+            For i As UInteger = 0 To 15
+                outBytes(writeOffset + i) = inBytes(offset * 8 + ddsWidth * 8 + i)
+            Next
+
+            writeOffset += 16
+        End If
+    End Sub
+
+    Private Sub ExtendInBytes(IsCubemap As Boolean)
+        Dim tempBytes(inBytes.Length * (4 / 3) - 1) As Byte
+        For i As UInteger = 0 To inBytes.Length / 3 - 1
+            tempBytes(i * 4) = inBytes(i * 3)
+            tempBytes(i * 4 + 1) = inBytes(i * 3 + 1)
+            tempBytes(i * 4 + 2) = inBytes(i * 3 + 2)
+            If IsCubemap Then
+                tempBytes(i * 4 + 3) = &HFF
+            Else
+                If i = inBytes.Length / 3 - 1 Then
+                    tempBytes(i * 4 + 3) = &H11
+                Else
+                    tempBytes(i * 4 + 3) = inBytes((i + 1) * 3)
+                End If
+            End If
+        Next
+        ReDim inBytes(tempBytes.Length - 1)
+        Array.Copy(tempBytes, inBytes, tempBytes.Length)
+    End Sub
+
+    Private Sub AddMemeBytes(ByRef ddsBytes As Byte())
+        ReDim Preserve ddsBytes(ddsBytes.Length + &H48 * 5 - 1)
+        Dim memeBytes(&H47) As Byte
+        For i As UInteger = 0 To &H47
+            memeBytes(i) = &HEE
+        Next
+        For i As UInteger = 0 To 4
+            Array.Copy(ddsBytes, &HAB8 + (4 - i) * &HAB8, ddsBytes, &HB00 + (4 - i) * &HB00, &HAB8)
+            Array.Copy(memeBytes, 0, ddsBytes, &HAB8 + (4 - i) * &HB00, &H48)
+        Next
+    End Sub
+
+    Private Sub RemoveMemeBytes(ByRef ddsBytes As Byte())
+        For i As UInteger = 0 To 4
+            Array.Copy(ddsBytes, &HB00 + i * &HB00, ddsBytes, &HAB8 + i * &HAB8, &HAB8)
+        Next
+        ReDim Preserve ddsBytes(ddsBytes.Length - &H48 * 5 - 1)
+    End Sub
+
     Private Sub txt_Drop(sender As Object, e As System.Windows.Forms.DragEventArgs) Handles txtBNDfile.DragDrop
         Dim file() As String = e.Data.GetData(DataFormats.FileDrop)
-        'sender.Text = file(0)
         sender.Lines = file
     End Sub
     Private Sub txt_DragEnter(sender As Object, e As System.Windows.Forms.DragEventArgs) Handles txtBNDfile.DragEnter
