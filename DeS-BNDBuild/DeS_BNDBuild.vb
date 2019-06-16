@@ -1748,7 +1748,7 @@ Public Class Des_BNDBuild
                                 bw.Write(ddsHeader.dwCaps2)
                                 bw.Seek(&H80, 0)
 
-                                If currFileFormat <> 22 Then
+                                If currFileFormat <> 22 And currFileFormat <> 105 Then
                                     bw.Write(ddsDx10Header.dxgiFormat)
                                     bw.Write(ddsDx10Header.resourceDimension)
                                     bw.Write(ddsDx10Header.miscFlag)
@@ -1772,6 +1772,8 @@ Public Class Des_BNDBuild
                                 Select Case (currFileFormat)
                                     Case 22, 25
                                         BlockSize = 8
+                                    Case 105
+                                        BlockSize = 4
                                     Case 0, 1, 103, 108, 109
                                         BlockSize = 8
                                     Case 5, 100, 102, 106, 107, 110
@@ -1845,17 +1847,31 @@ Public Class Des_BNDBuild
                                     Next
                                 Else
                                     For j As UInteger = 0 To ddsHeader.dwMipMapCount - 1
-                                        paddedWidth = Math.Ceiling(Width / 32) * 32
-                                        paddedHeight = Math.Ceiling(Height / 32) * 32
-                                        paddedSize = Math.Ceiling(paddedWidth / 4) * Math.Ceiling(paddedHeight / 4) * BlockSize
+
+                                        If currFileFormat = 105 Then
+                                            paddedWidth = Width
+                                            paddedHeight = Height
+                                            paddedSize = paddedWidth * paddedHeight * BlockSize
+                                        Else
+                                            paddedWidth = Math.Ceiling(Width / 32) * 32
+                                            paddedHeight = Math.Ceiling(Height / 32) * 32
+                                            paddedSize = Math.Ceiling(paddedWidth / 4) * Math.Ceiling(paddedHeight / 4) * BlockSize
+                                        End If
+
                                         ddsWidth = paddedWidth
                                         ReDim inBytes(paddedSize - 1)
                                         ReDim outBytes(paddedSize - 1)
                                         Array.Copy(bytes, copyOffset, inBytes, 0, paddedSize)
                                         DeswizzleDDSBytesPS4(paddedWidth, paddedHeight, currFileFormat)
-                                        For k As UInteger = 0 To Math.Ceiling(Height / 4) - 1
-                                            bw.Write(outBytes, CType(k * Math.Ceiling(paddedWidth / 4) * BlockSize, UInteger), CType(Math.Ceiling(Width / 4) * BlockSize, UInteger))
-                                        Next
+
+                                        If currFileFormat = 105 Then
+                                            bw.Write(outBytes)
+                                        Else
+                                            For k As UInteger = 0 To Math.Ceiling(Height / 4) - 1
+                                                bw.Write(outBytes, CType(k * Math.Ceiling(paddedWidth / 4) * BlockSize, UInteger), CType(Math.Ceiling(Width / 4) * BlockSize, UInteger))
+                                            Next
+                                        End If
+
                                         copyOffset += paddedSize
                                         If Width > 1 Then
                                             Width /= 2
@@ -3482,13 +3498,15 @@ Public Class Des_BNDBuild
                                     Width = currFileWidth
                                     Height = currFileHeight
 
-                                    If currFileFormat = 22 Then
+                                    If currFileFormat = 22 Or currFileFormat = 105 Then
                                         copyOffset = &H80
                                     Else
                                         copyOffset = &H94
                                     End If
 
                                     Select Case (currFileFormat)
+                                        Case 105
+                                            BlockSize = 4
                                         Case 22, 25
                                             BlockSize = 8
                                         Case 0, 1, 103, 108, 109
@@ -3581,17 +3599,28 @@ Public Class Des_BNDBuild
                                         Next
                                     Else
                                         For j As UInteger = 0 To currFileMipMaps - 1
-                                            paddedWidth = Math.Ceiling(Width / 32) * 32
-                                            paddedHeight = Math.Ceiling(Height / 32) * 32
-                                            paddedSize = Math.Ceiling(paddedWidth / 4) * Math.Ceiling(paddedHeight / 4) * BlockSize
+                                            If currFileFormat = 105 Then
+                                                paddedWidth = Width
+                                                paddedHeight = Height
+                                                paddedSize = paddedWidth * paddedHeight * BlockSize
+                                            Else
+                                                paddedWidth = Math.Ceiling(Width / 32) * 32
+                                                paddedHeight = Math.Ceiling(Height / 32) * 32
+                                                paddedSize = Math.Ceiling(paddedWidth / 4) * Math.Ceiling(paddedHeight / 4) * BlockSize
+                                            End If
+
                                             ddsWidth = paddedWidth
                                             ReDim outBytes(paddedSize - 1)
                                             ReDim inBytes(paddedSize - 1)
 
-                                            For k As UInteger = 0 To Math.Ceiling(Height / 4) - 1
-                                                Array.Copy(tmpbytes, copyOffset, inBytes, CType(k * Math.Ceiling(paddedWidth / 4) * BlockSize, UInteger), CType(Math.Ceiling(Width / 4) * BlockSize, UInteger))
-                                                copyOffset += Math.Ceiling(Width / 4) * BlockSize
-                                            Next
+                                            If currFileFormat = 105 Then
+                                                Array.Copy(tmpbytes, copyOffset, inBytes, 0, paddedSize)
+                                            Else
+                                                For k As UInteger = 0 To Math.Ceiling(Height / 4) - 1
+                                                    Array.Copy(tmpbytes, copyOffset, inBytes, CType(k * Math.Ceiling(paddedWidth / 4) * BlockSize, UInteger), CType(Math.Ceiling(Width / 4) * BlockSize, UInteger))
+                                                    copyOffset += Math.Ceiling(Width / 4) * BlockSize
+                                                Next
+                                            End If
 
                                             SwizzleDDSBytesPS4(Width, Height, currFileFormat)
 
@@ -3960,6 +3989,7 @@ Public Class Des_BNDBuild
                 ddsHeader.ddspf.dwRBitMask = 0
                 ddsHeader.ddspf.dwGBitMask = 0
                 ddsHeader.ddspf.dwBBitMask = 0
+                ddsHeader.dwCaps = &H401008
             Case 5, 100, 102, 106, 107, 110
                 ddsHeader.ddspf.dwFourCC = &H30315844
                 ddsHeader.dwPitchOrLinearSize = (height / 4) * (width / 4) * 16
@@ -3968,6 +3998,7 @@ Public Class Des_BNDBuild
                 ddsHeader.ddspf.dwRBitMask = 0
                 ddsHeader.ddspf.dwGBitMask = 0
                 ddsHeader.ddspf.dwBBitMask = 0
+                ddsHeader.dwCaps = &H401008
             Case 22
                 ddsHeader.ddspf.dwFourCC = &H71
                 ddsHeader.dwPitchOrLinearSize = (height / 4) * (width / 4) * 8
@@ -3976,6 +4007,18 @@ Public Class Des_BNDBuild
                 ddsHeader.ddspf.dwRBitMask = 0
                 ddsHeader.ddspf.dwGBitMask = 0
                 ddsHeader.ddspf.dwBBitMask = 0
+                ddsHeader.dwCaps = &H401008
+            Case 105
+                ddsHeader.dwFlags = &H100F
+                ddsHeader.ddspf.dwFourCC = 0
+                ddsHeader.dwPitchOrLinearSize = &H40
+                ddsHeader.ddspf.dwFlags = &H41
+                ddsHeader.ddspf.dwRGBBitCount = &H20
+                ddsHeader.ddspf.dwRBitMask = &HFF
+                ddsHeader.ddspf.dwGBitMask = &HFF00
+                ddsHeader.ddspf.dwBBitMask = &HFF0000
+                ddsHeader.ddspf.dwABitMask = &HFF000000
+                ddsHeader.dwCaps = &H1002
         End Select
 
         ddsHeader.dwDepth = 1
@@ -3993,8 +4036,6 @@ Public Class Des_BNDBuild
         End If
 
         ddsHeader.ddspf.dwSize = &H20
-
-        ddsHeader.dwCaps = &H401008
 
         Return ddsHeader
     End Function
@@ -4127,6 +4168,28 @@ Public Class Des_BNDBuild
         End If
     End Sub
 
+    Private Sub DeswizzleDDSBytesPS4RGBA8(Width As UInteger, Height As UInteger, offset As UInteger, offsetFactor As UInteger)
+        If (Width * Height > 4) Then
+            DeswizzleDDSBytesPS4RGBA8(Width / 2, Height / 2, offset, offsetFactor * 2)
+            DeswizzleDDSBytesPS4RGBA8(Width / 2, Height / 2, offset + (Width / 2), offsetFactor * 2)
+            DeswizzleDDSBytesPS4RGBA8(Width / 2, Height / 2, offset + ((Width / 2) * (Height / 2) * offsetFactor), offsetFactor * 2)
+            DeswizzleDDSBytesPS4RGBA8(Width / 2, Height / 2, offset + ((Width / 2) * (Height / 2) * offsetFactor) + (Width / 2), offsetFactor * 2)
+        Else
+            For i As UInteger = 0 To 7
+                outBytes(offset * 4 + i) = inBytes(writeOffset + i)
+            Next
+
+            writeOffset += 8
+
+            For i As UInteger = 0 To 7
+                outBytes(offset * 4 + ddsWidth * 4 + i) = inBytes(writeOffset + i)
+            Next
+
+            writeOffset += 8
+        End If
+    End Sub
+
+
     'Private Sub DeswizzleDDSBytesPS4(Width As UInteger, Height As UInteger, offset As UInteger, offsetFactor As UInteger, format As UInteger)
     '    Dim BlockSize As UInteger
     '    Select Case (format)
@@ -4206,6 +4269,8 @@ Public Class Des_BNDBuild
         Select Case (Format)
             Case 22
                 BlockSize = 8
+            Case 105
+                BlockSize = 4
             Case 0, 1, 25, 103, 108, 109
                 BlockSize = 8
             Case 5, 100, 102, 106, 107, 110
@@ -4231,6 +4296,10 @@ Public Class Des_BNDBuild
             BlocksH = (Width + 7) \ 8
             BlocksV = (Height + 7) \ 8
             SwizzleBlockSize = 8
+        ElseIf Format = 105 Then
+            BlocksH = (Width + 15) \ 16
+            BlocksV = (Height + 15) \ 16
+            SwizzleBlockSize = 16
         Else
             BlocksH = (Width + 31) \ 32
             BlocksV = (Height + 31) \ 32
@@ -4246,23 +4315,36 @@ Public Class Des_BNDBuild
             writeOffset = 0
             Return
         End If
+        'ElseIf Format = 105 Then
+        '    DeswizzleDDSBytesPS4RGBA8(Width, Height, 0, 2)
+        '    writeOffset = 0
+        '    Return
+        'End If
 
         For i As UInteger = 0 To BlocksV - 1
             h = 0
             For j As UInteger = 0 To BlocksH - 1
                 offset = h + v
 
-                DeswizzleDDSBytesPS4(32, 32, offset, 2, Format)
+                If Format = 105 Then
+                    DeswizzleDDSBytesPS4RGBA8(16, 16, offset, 2)
+                Else
+                    DeswizzleDDSBytesPS4(32, 32, offset, 2, Format)
+                End If
+
 
                 h += (SwizzleBlockSize / 4) * BlockSize
-                SwizzleBlockSize = 32
+                'SwizzleBlockSize = 32
             Next
-            If BlockSize = 8 Then
-                v += SwizzleBlockSize * Width / 2
+            If Format = 105 Then
+                v += SwizzleBlockSize * SwizzleBlockSize
             Else
-                v += SwizzleBlockSize * Width
+                If BlockSize = 8 Then
+                    v += SwizzleBlockSize * Width / 2
+                Else
+                    v += SwizzleBlockSize * Width
+                End If
             End If
-
         Next
 
         writeOffset = 0
@@ -4271,6 +4353,8 @@ Public Class Des_BNDBuild
     Private Sub SwizzleDDSBytesPS4(Width As UInteger, Height As UInteger, Format As UInteger)
         Dim BlockSize As UInteger = 0
         Select Case (Format)
+            Case 105
+                BlockSize = 4
             Case 22
                 BlockSize = 8
             Case 0, 1, 25, 103, 108, 109
@@ -4298,6 +4382,10 @@ Public Class Des_BNDBuild
             BlocksH = (Width + 7) \ 8
             BlocksV = (Height + 7) \ 8
             SwizzleBlockSize = 8
+        ElseIf Format = 105 Then
+            BlocksH = (Width + 15) \ 16
+            BlocksV = (Height + 15) \ 16
+            SwizzleBlockSize = 16
         Else
             BlocksH = (Width + 31) \ 32
             BlocksV = (Height + 31) \ 32
@@ -4319,11 +4407,17 @@ Public Class Des_BNDBuild
             For j As UInteger = 0 To BlocksH - 1
                 offset = h + v
 
-                SwizzleDDSBytesPS4(32, 32, offset, 2, Format)
+                If Format = 105 Then
+                    SwizzleDDSBytesPS4RGBA8(16, 16, offset, 2)
+                Else
+                    SwizzleDDSBytesPS4(32, 32, offset, 2, Format)
+                End If
+
 
                 h += (SwizzleBlockSize / 4) * BlockSize
-                SwizzleBlockSize = 32
+                'SwizzleBlockSize = 32
             Next
+
             If BlockSize = 8 Then
                 v += SwizzleBlockSize * Width / 2
             Else
@@ -4374,6 +4468,27 @@ Public Class Des_BNDBuild
             Next
 
             writeOffset += 16
+        End If
+    End Sub
+
+    Private Sub SwizzleDDSBytesPS4RGBA8(Width As UInteger, Height As UInteger, offset As UInteger, offsetFactor As UInteger)
+        If (Width * Height > 4) Then
+            SwizzleDDSBytesPS4RGBA8(Width / 2, Height / 2, offset, offsetFactor * 2)
+            SwizzleDDSBytesPS4RGBA8(Width / 2, Height / 2, offset + (Width / 2), offsetFactor * 2)
+            SwizzleDDSBytesPS4RGBA8(Width / 2, Height / 2, offset + ((Width / 2) * (Height / 2) * offsetFactor), offsetFactor * 2)
+            SwizzleDDSBytesPS4RGBA8(Width / 2, Height / 2, offset + ((Width / 2) * (Height / 2) * offsetFactor) + (Width / 2), offsetFactor * 2)
+        Else
+            For i As UInteger = 0 To 7
+                outBytes(writeOffset + i) = inBytes(offset * 4 + i)
+            Next
+
+            writeOffset += 8
+
+            For i As UInteger = 0 To 7
+                outBytes(writeOffset + i) = inBytes(offset * 4 + ddsWidth * 4 + i)
+            Next
+
+            writeOffset += 8
         End If
     End Sub
 

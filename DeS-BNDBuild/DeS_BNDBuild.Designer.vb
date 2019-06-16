@@ -110,7 +110,7 @@ Partial Class Des_BNDBuild
         Me.lblVersion.Name = "lblVersion"
         Me.lblVersion.Size = New System.Drawing.Size(82, 17)
         Me.lblVersion.TabIndex = 42
-        Me.lblVersion.Text = "2019-05-26"
+        Me.lblVersion.Text = "2019-06-16"
         '
         'SekiroRadio
         '
