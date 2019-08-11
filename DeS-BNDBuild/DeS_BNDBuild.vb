@@ -304,6 +304,19 @@ Public Class Des_BNDBuild
 
     End Sub
 
+    Private Function ReverseHash(hash As UInteger, filename As String) As UInteger
+        If filename Is Nothing Then
+            Return 0
+        End If
+
+        Dim reversefilename As String = StrReverse(filename)
+
+        For Each ch As Char In reversefilename
+            hash = (hash - Asc(Char.ToLowerInvariant(ch))) / &H25
+        Next
+
+        Return hash
+    End Function
 
     Private Function HashFileName(filename As String) As UInteger
 
@@ -458,10 +471,11 @@ Public Class Des_BNDBuild
         '        Next
         '    Next
         'Next
-        'output(TimeOfDay & " - hash." & HashFileName(txtBNDfile.Lines(0)) & Environment.NewLine)
-        ''output("done" & Environment.NewLine)
+        'output(TimeOfDay & " - hash." & Hex(HashFileName(txtBNDfile.Lines(0))) & Environment.NewLine)
+        'output(TimeOfDay & " - hash." & ReverseHash(txtBNDfile.Lines(0), txtBNDfile.Lines(1)) & Environment.NewLine)
+        'output("done" & Environment.NewLine)
         'SyncLock workLock
-        '    work = False
+        'work = False
         'End SyncLock
 
         'Return
@@ -816,7 +830,6 @@ Public Class Des_BNDBuild
                             End If
 
                             For j = 0 To count - 1
-
                                 currFileSize = UIntFromBytes(bhdOffSet + &H4)
 
                                 If bigEndian Then
@@ -1630,7 +1643,7 @@ Public Class Des_BNDBuild
                                 bw.Close()
                             Next
 
-                        ElseIf flags = &H20300 Or flags = &H20304 Then
+                        ElseIf flags = &H20300 Then
                             ' Dark Souls
 
                             BinderID = Microsoft.VisualBasic.Left(StrFromBytes(&H0), 3)
@@ -1656,6 +1669,44 @@ Public Class Des_BNDBuild
 
                                 ReDim currFileBytes(currFileSize - 1)
                                 Array.Copy(bytes, currFileOffset, currFileBytes, 0, currFileSize)
+                                File.WriteAllBytes(currFilePath & currFileName, currFileBytes)
+                            Next
+                        ElseIf flags = &H20304 Then
+                            ' Dark Souls (NvTexture)
+
+                            BinderID = Microsoft.VisualBasic.Left(StrFromBytes(&H0), 3)
+                            numFiles = UIntFromBytes(&H8)
+
+                            fileList = BinderID & Environment.NewLine & flags & Environment.NewLine
+
+                            For i As UInteger = 0 To numFiles - 1
+                                currFileOffset = UIntFromBytes(&H10 + i * &H14)
+                                currFileSize = UIntFromBytes(&H14 + i * &H14)
+                                currFileFlags1 = UIntFromBytes(&H18 + i * &H14)
+                                currFileNameOffset = UIntFromBytes(&H1C + i * &H14)
+                                currFileFlags2 = UIntFromBytes(&H20 + i * &H14)
+                                currFileName = DecodeFileName(currFileNameOffset) & ".dds"
+                                fileList += currFileFlags1 & "," & currFileFlags2 & "," & currFileName & Environment.NewLine
+                                currFileName = filepath & filename & ".extract\" & currFileName
+                                currFilePath = Microsoft.VisualBasic.Left(currFileName, InStrRev(currFileName, "\"))
+                                currFileName = Microsoft.VisualBasic.Right(currFileName, currFileName.Length - currFilePath.Length)
+
+                                If (Not System.IO.Directory.Exists(currFilePath)) Then
+                                    System.IO.Directory.CreateDirectory(currFilePath)
+                                End If
+
+                                ReDim currFileBytes(currFileSize - 1)
+                                Array.Copy(bytes, currFileOffset, currFileBytes, 0, currFileSize)
+
+                                'If i = 0 Then
+                                '    ReDim outBytes(&H8000 - 1)
+                                '    ReDim inBytes(&H8000 - 1)
+                                '    Array.Copy(currFileBytes, &H200, inBytes, 0, &H8000)
+                                '    DeswizzleDDSBytesSwitch(256, 256, 0)
+                                '    File.WriteAllBytes("test", outBytes)
+                                'End If
+
+
                                 File.WriteAllBytes(currFilePath & currFileName, currFileBytes)
                             Next
                         ElseIf flags = &H10300 Then
@@ -3214,8 +3265,8 @@ Public Class Des_BNDBuild
 
                                     currFileSize = tmpbytes.Length - &H80
 
-                                    currFileWidth = BitConverter.ToUInt16(tmpbytes, 12)
-                                    currFileHeight = BitConverter.ToUInt16(tmpbytes, 16)
+                                    currFileHeight = BitConverter.ToUInt16(tmpbytes, 12)
+                                    currFileWidth = BitConverter.ToUInt16(tmpbytes, 16)
 
                                     If (currFileFormat = 10 Or currFileFormat = 9) Then
                                         If currFileIsCubemap Then
@@ -3693,7 +3744,7 @@ Public Class Des_BNDBuild
 
                     Select Case Microsoft.VisualBasic.Left(fileList(0), 4)
                         Case "EDGE"
-                            Dim chunkBytes(&H10000) As Byte
+                            Dim chunkBytes(&H10000 - 1) As Byte
                             Dim cmpChunkBytes() As Byte
                             Dim zipBytes() As Byte = {}
 
@@ -3706,7 +3757,7 @@ Public Class Des_BNDBuild
 
                             currFileSize = tmpbytes.Length
 
-                            ReDim bytes(&H83)
+                            ReDim bytes(&H6F)
 
                             Dim fileRemaining As Integer = tmpbytes.Length
                             Dim fileDone As Integer = 0
@@ -3736,21 +3787,26 @@ Public Class Des_BNDBuild
                                 End If
                                 lastchunk += padding
 
-                                ReDim Preserve zipBytes(lastchunk + cmpChunkBytes.Length)
+                                ReDim Preserve zipBytes(lastchunk + cmpChunkBytes.Length - 1)
                                 Array.Copy(cmpChunkBytes, 0, zipBytes, lastchunk, cmpChunkBytes.Length)
 
 
                                 fileDone += fileToDo
                                 fileRemaining -= fileToDo
 
-                                ReDim Preserve bytes(bytes.Length + &H10)
+                                ReDim Preserve bytes(bytes.Length + &H10 - 1)
 
                                 UIntToBytes(lastchunk, &H64 + chunks * &H10)
                                 UIntToBytes(cmpChunkBytes.Length, &H68 + chunks * &H10)
                                 UIntToBytes(&H1, &H6C + chunks * &H10)
 
                             End While
-                            ReDim Preserve bytes(bytes.Length + zipBytes.Length)
+
+                            If zipBytes.Length Mod &H10 > 0 Then
+                                ReDim Preserve bytes(bytes.Length + zipBytes.Length + (zipBytes.Length Mod &H10) - 1)
+                            Else
+                                ReDim Preserve bytes(bytes.Length + zipBytes.Length - 1)
+                            End If
 
                             StrToBytes("DCX", &H0)
                             UIntToBytes(&H10000, &H4)
@@ -4348,6 +4404,29 @@ Public Class Des_BNDBuild
         Next
 
         writeOffset = 0
+    End Sub
+
+    Private Sub DeswizzleDDSBytesSwitch(Width As UInteger, Height As UInteger, Format As UInteger)
+        Dim NumStripes = Width / 32
+        Dim NumBlocksInStripe = Height / 32
+        Dim ddsBlockSize = 8
+        Dim StripeWidth = ddsBlockSize * 8
+        Dim StripeBlockSize = StripeWidth * 8
+        Dim offset = 0
+        ddsWidth = 256
+        For i = 0 To NumStripes - 1
+            For j = 0 To NumBlocksInStripe - 1
+                offset = i * StripeWidth + j * NumStripes * StripeBlockSize
+                'left
+                DeswizzleDDSBytesPS4(16, 16, offset, 2, 0)
+                DeswizzleDDSBytesPS4(16, 16, offset + NumStripes * StripeBlockSize / 2, 2, 0)
+                'right
+                DeswizzleDDSBytesPS4(16, 16, offset + StripeWidth / 2, 2, 0)
+                DeswizzleDDSBytesPS4(16, 16, offset + StripeWidth / 2 + NumStripes * StripeBlockSize / 2, 2, 0)
+
+            Next
+        Next
+
     End Sub
 
     Private Sub SwizzleDDSBytesPS4(Width As UInteger, Height As UInteger, Format As UInteger)
